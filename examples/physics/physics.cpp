@@ -129,7 +129,7 @@ public:
             const glmvec3 gravity{0.0f, 0.0f, 0.0f};
             ThrowCube(gravity);
         }
-        if (key == SDL_SCANCODE_T)
+        if (key == SDL_SCANCODE_E)
         {
             const glmvec3 gravity{0.0f, m_physics.c_gravity, 0.0f};
             ThrowCube(gravity);
