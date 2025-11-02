@@ -126,26 +126,7 @@ public:
 
         if (key == SDL_SCANCODE_B)
         {
-            ThrowCubeWithDrag();
-        }
-        if (key == SDL_SCANCODE_E)
-        {
-            const glmvec3 gravity{0.0f, m_physics.c_gravity, 0.0f};
-            ThrowCubeWithGravity(gravity);
-        }
-        if (key == SDL_SCANCODE_M)
-        {
-            const glmvec3 gravity{0.0f, -1.62f, 0.0f};
-            ThrowCubeWithGravity(gravity);
-        }
-        if (key == SDL_SCANCODE_J)
-        {
-            const glmvec3 gravity{0.0f, -24.79f, 0.0f};
-            ThrowCubeWithGravity(gravity);
-        }
-        if (key == SDL_SCANCODE_C)
-        {
-            ThrowCubePullingToTarget(glmvec3{100.0f, 100.0f, 100.0f}, 15.0_real);
+            DropCube();
         }
 
         return false;
@@ -177,72 +158,27 @@ private:
     vecs::Handle m_cameraNodeHandle{};
     float m_volume{MIX_MAX_VOLUME / 2.0};
 
-     void ThrowCubeWithDrag()
-    {
-        auto [pn, rn, sn, LtoPn] = m_registry.template Get<vve::Position &, vve::Rotation &, vve::Scale &, vve::LocalToParentMatrix>(m_cameraNodeHandle);
-        auto [pc, rc, sc, LtoPc] = m_registry.template Get<vve::Position &, vve::Rotation &, vve::Scale &, vve::LocalToParentMatrix>(m_cameraHandle);
-
-        glmvec3 dir{vec3_t{LtoPn() * LtoPc() * vec4_t{0.0f, 0.0f, -1.0f, 0.0f}}};
-        glmvec3 vel = (30.0_real + 5.0_real * (real)rnd_unif(rnd_gen)) * dir / glm::length(dir);
-        glmvec3 scale{1, 1, 1};
-        float angle = (real)rnd_unif(rnd_gen) * 10 * 3 * (real)M_PI / 180.0_real;
-        glmvec3 orient{rnd_unif(rnd_gen), rnd_unif(rnd_gen), rnd_unif(rnd_gen)};
-        glmvec3 vrot{rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5};
-
-        vecs::Handle handleCube = m_engine.CreateScene(vve::Name{},
-                                                       vve::ParentHandle{},
-                                                       vve::Filename{cube_obj}, aiProcess_FlipWindingOrder,
-                                                       vve::Position{{0.0f, 0.0f, 0.0f}},
-                                                       vve::Rotation{mat3_t{1.0f}},
-                                                       vve::Scale{vec3_t{1.0f}});
-
-        auto body = std::make_shared<vpe::VPEWorld::Body>(
-            &m_physics,
-            "Body" + std::to_string(m_physics.m_bodies.size()),
-            reinterpret_cast<void *>(handleCube.GetValue()),
-            &m_physics.g_cube,
-            scale,
-            toPhysics(pn()),
-            toPhysics(glm::rotate(glm::mat4{1.0f}, angle, glm::normalize(orient))),
-            toPhysics(vel),
-            toPhysics(vrot),
-            1.0_real / 100.0_real,
-            m_physics.m_restitution,
-            m_physics.m_friction);
-
-        // No gravity; just drag based on current linear velocity
-        auto baseOnMove = onMove;
-        body->m_on_move = [this, baseOnMove, kDrag = 0.2f](double dt, std::shared_ptr<vpe::VPEWorld::Body> b)
-        {
-            glmvec3 v = b->m_linear_velocityW;               
-            glmvec3 Fd = -kDrag * v;    // simple linear drag
-            b->setForce(1ul, vpe::VPEWorld::Force{Fd});
-
-            if (glm::length(v) < 0.05f) {
-                b->m_angular_velocityW = glmvec3{0.0f};
-            }
-
-            baseOnMove(dt, b);
-        };
-
-        body->m_on_erase = onErase;
-
-        onMove(0.0, body);
-        m_physics.addBody(body);
-    }
-
-    void ThrowCubeWithGravity(glmvec3 gravity)
+    void DropCube()
     {
         static uint64_t body_id{0};
-        auto [pn, rn, sn, LtoPn] = m_registry.template Get<vve::Position &, vve::Rotation &, vve::Scale &, vve::LocalToParentMatrix>(m_cameraNodeHandle);
-        auto [pc, rc, sc, LtoPc] = m_registry.template Get<vve::Position &, vve::Rotation &, vve::Scale &, vve::LocalToParentMatrix>(m_cameraHandle);
 
-        glmvec3 dir{vec3_t{LtoPn() * LtoPc() * vec4_t{0.0f, 0.0f, -1.0f, 0.0f}}};
-        glmvec3 vel = (30.0_real + 5.0_real * (real)rnd_unif(rnd_gen)) * dir / glm::length(dir);
-        glmvec3 scale{1, 1, 1};
-        float angle = (real)rnd_unif(rnd_gen) * 10 * 3 * (real)M_PI / 180.0_real;
-        glmvec3 orient{rnd_unif(rnd_gen), rnd_unif(rnd_gen), rnd_unif(rnd_gen)};
-        glmvec3 vrot{rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5};
+        // Determine up direction in game space from physics gravity
+        const glmvec3 gravityPhys{0.0f, m_physics.c_gravity, 0.0f};
+        const glmvec3 gravityGame = fromPhysics(gravityPhys);
+        const glmvec3 upGame = -glm::normalize(gravityGame); // opposite of gravity
+
+        // Spawn 100 meters above the ground origin
+        const float dropHeight = 100.0f; // meters
+        const glmvec3 spawnPos = dropHeight * upGame;
+
+        // Zero initial linear velocity for a pure drop
+        const glmvec3 vel{0.0f, 0.0f, 0.0f};
+
+        // Keep simple orientation (no initial spin)
+        const glmvec3 scale{1.0f, 1.0f, 1.0f};
+        const float angle = 0.0f;
+        const glmvec3 orientAxis{0.0f, 1.0f, 0.0f};
+        const glmvec3 vrot{0.0f, 0.0f, 0.0f};
 
         vecs::Handle handleCube = m_engine.CreateScene(vve::Name{},
                                                        vve::ParentHandle{},
@@ -257,78 +193,30 @@ private:
             reinterpret_cast<void *>(handleCube.GetValue()),
             &m_physics.g_cube,
             scale,
-            toPhysics(pn()),
-            toPhysics(glm::rotate(glm::mat4{1.0f}, angle, glm::normalize(orient))),
+            toPhysics(spawnPos),
+            toPhysics(glm::rotate(glm::mat4{1.0f}, angle, glm::normalize(orientAxis))),
             toPhysics(vel),
             toPhysics(vrot),
             1.0_real / 100.0_real,
             m_physics.m_restitution,
             m_physics.m_friction);
 
-        // Use the input gravity parameter
-        body->setForce(0ul, vpe::VPEWorld::Force{gravity});
+        // Apply gravity from the physics world
+        body->setForce(0ul, vpe::VPEWorld::Force{gravityPhys});
         body->m_on_move = onMove;
         body->m_on_erase = onErase;
 
         onMove(0.0, body);
         m_physics.addBody(body);
+
+        // Analytic drop time for s = 100 m, a = 9.81 m/s^2
+        const float a = 9.81f;
+        const float t = std::sqrt(2.0f * dropHeight / a);
+        std::cout << std::format("Analytic drop time from {:.1f} m: {:.3f} s (a = {:.2f} m/s^2)\n",
+                                 dropHeight, t, a);
     }
 
-    void ThrowCubePullingToTarget(glmvec3 target, real pullStrength)
-    {
-        auto [pn, rn, sn, LtoPn] = m_registry.template Get<vve::Position &, vve::Rotation &, vve::Scale &, vve::LocalToParentMatrix>(m_cameraNodeHandle);
-        auto [pc, rc, sc, LtoPc] = m_registry.template Get<vve::Position &, vve::Rotation &, vve::Scale &, vve::LocalToParentMatrix>(m_cameraHandle);
-
-        glmvec3 dir{vec3_t{LtoPn() * LtoPc() * vec4_t{0.0f, 0.0f, -1.0f, 0.0f}}};
-        glmvec3 vel = (30.0_real + 5.0_real * (real)rnd_unif(rnd_gen)) * dir / glm::length(dir);
-        glmvec3 scale{1, 1, 1};
-        float angle = (real)rnd_unif(rnd_gen) * 10 * 3 * (real)M_PI / 180.0_real;
-        glmvec3 orient{rnd_unif(rnd_gen), rnd_unif(rnd_gen), rnd_unif(rnd_gen)};
-        glmvec3 vrot{rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5};
-
-        vecs::Handle handleCube = m_engine.CreateScene(vve::Name{},
-                                                       vve::ParentHandle{},
-                                                       vve::Filename{cube_obj}, aiProcess_FlipWindingOrder,
-                                                       vve::Position{{0.0f, 0.0f, 0.0f}},
-                                                       vve::Rotation{mat3_t{1.0f}},
-                                                       vve::Scale{vec3_t{1.0f}});
-
-        auto body = std::make_shared<vpe::VPEWorld::Body>(
-            &m_physics,
-            "Body" + std::to_string(m_physics.m_bodies.size()),
-            reinterpret_cast<void *>(handleCube.GetValue()),
-            &m_physics.g_cube,
-            scale,
-            toPhysics(pn()),
-            toPhysics(glm::rotate(glm::mat4{1.0f}, angle, glm::normalize(orient))),
-            toPhysics(vel),
-            toPhysics(vrot),
-            1.0_real / 100.0_real,
-            m_physics.m_restitution,
-            m_physics.m_friction);
-
-        // Simple constant-magnitude pull toward target
-        const glmvec3 targetP = toPhysics(target);
-        auto baseOnMove = onMove;
-        body->m_on_move = [this, baseOnMove, targetP, pullStrength](double dt, std::shared_ptr<vpe::VPEWorld::Body> b)
-        {
-            glmvec3 pos = b->m_positionW;
-            glmvec3 delta = targetP - pos;
-            real d = glm::length(delta);
-            glmvec3 F{0.0f};
-            if (d > 1e-5_real) F = pullStrength * (delta / d); // constant strength toward target
-            b->setForce(0ul, vpe::VPEWorld::Force{F});
-
-            baseOnMove(dt, b);
-        };
-
-        body->m_on_erase = onErase;
-
-        onMove(0.0, body);
-        m_physics.addBody(body);
-    }
 };
-
 int main()
 {
     vve::Engine engine("My Engine", vve::RendererType::RENDERER_TYPE_FORWARD);
