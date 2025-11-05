@@ -116,6 +116,71 @@ public:
         auto msg = message.template GetData<vve::System::MsgUpdate>();
         auto dt = msg.m_dt;
         m_physics.tick(dt);
+
+        // --- Analytic fall update: h(t) = h0 - 0.5 * a * t^2 ---
+        if (m_analyticActive && m_analyticCube.IsValid())
+        {
+            m_analyticT += static_cast<float>(dt);
+            float h = m_dropHeight - 0.5f * m_analyticA * m_analyticT * m_analyticT;
+            if (h <= 0.0f)
+            {
+                h = 0.0f;
+                m_analyticActive = false;
+                std::cout << std::format("Impact at t = {:.3f} s (a = {:.2f} m/s^2)\n",
+                                         m_analyticT, m_analyticA);
+            }
+            m_registry.Get<vve::Position &>(m_analyticCube)() = h * m_upGame;
+        }
+
+        // --- Euler fall update (explicit Euler, fixed step m_eulerDt) ---
+        if (m_eulerActive && m_eulerCube.IsValid())
+        {
+            m_eulerAccum += dt;
+            while (m_eulerAccum + 1e-9 >= m_eulerDt && m_eulerActive)
+            {
+                m_eulerAccum -= m_eulerDt;
+
+                // v' = -a, h' = v  (up-positive)
+                m_eulerV += -m_eulerA * m_eulerDt;   // update velocity
+                m_eulerH +=  m_eulerV * m_eulerDt;   // update height
+                m_eulerT +=  m_eulerDt;
+
+                if (m_eulerH <= 0.0f)
+                {
+                    m_eulerH = 0.0f;
+                    m_eulerActive = false;
+                    std::cout << std::format("Euler impact at t = {:.3f} s (dt = {:.3f} s)\n",
+                                             m_eulerT, m_eulerDt);
+                }
+            }
+            m_registry.Get<vve::Position &>(m_eulerCube)() = m_eulerH * m_upGame;
+        }
+        
+        // --- Symplectic Euler fall update (v first, then h) ---
+        if (m_sympActive && m_sympCube.IsValid())
+        {
+            m_sympAccum += dt;
+            while (m_sympAccum + 1e-9 >= m_sympDt && m_sympActive)
+            {
+                m_sympAccum -= m_sympDt;
+
+                // v_{n+1} = v_n - a*dt
+                m_sympV += -m_sympA * m_sympDt;
+                // h_{n+1} = h_n + v_{n+1}*dt
+                m_sympH +=  m_sympV * m_sympDt;
+                m_sympT +=  m_sympDt;
+
+                if (m_sympH <= 0.0f)
+                {
+                    m_sympH = 0.0f;
+                    m_sympActive = false;
+                    std::cout << std::format("Symplectic Euler impact at t = {:.3f} s (dt = {:.3f} s)\n",
+                                             m_sympT, m_sympDt);
+                }
+            }
+            m_registry.Get<vve::Position &>(m_sympCube)() = m_sympH * m_upGame;
+        }
+
         return false;
     }
 
@@ -126,7 +191,23 @@ public:
 
         if (key == SDL_SCANCODE_B)
         {
-            DropCube();
+            DropCubeAnalytic();
+        }
+        if (key == SDL_SCANCODE_N)
+        {
+            DropCubeEuler(1.0f);
+        }
+        if (key == SDL_SCANCODE_M)
+        {
+            DropCubeEuler(0.1f);
+        }
+        if (key == SDL_SCANCODE_K)
+        {
+            DropCubeSymplectic(1.0f);   // change here to adjust dt easily
+        }
+        if (key == SDL_SCANCODE_L)
+        {
+            DropCubeSymplectic(0.001f);   // 0.1 s
         }
 
         return false;
@@ -158,63 +239,144 @@ private:
     vecs::Handle m_cameraNodeHandle{};
     float m_volume{MIX_MAX_VOLUME / 2.0};
 
-    void DropCube()
-    {
-        static uint64_t body_id{0};
+    // --- Minimal analytic fall state ---
+    vecs::Handle m_analyticCube{};
+    bool  m_analyticActive{false};
+    float m_analyticT{0.0f};
+    float m_analyticA{9.81f};    // m/s^2
+    float m_dropHeight{100.0f};  // meters
+    glmvec3 m_upGame{0.0f, 1.0f, 0.0f};
 
-        // Determine up direction in game space from physics gravity
+    // --- Euler fall state (explicit Euler, fixed step delta_t) ---
+    vecs::Handle m_eulerCube{};
+    bool  m_eulerActive{false};
+    float m_eulerT{0.0f};
+    float m_eulerA{9.81f};   // m/s^2 (downward)
+    float m_eulerH{0.0f};    // height above ground (m)
+    float m_eulerV{0.0f};    // vertical velocity (m/s), + is up
+    float m_eulerDt{1.0f};   // fixed step (s)
+    double m_eulerAccum{0.0};
+
+    // --- Symplectic Euler state (semi-implicit Euler, fixed step delta_t) ---
+    vecs::Handle m_sympCube{};
+    bool  m_sympActive{false};
+    float m_sympT{0.0f};
+    float m_sympA{9.81f};   // m/s^2
+    float m_sympH{0.0f};    // height (m)
+    float m_sympV{0.0f};    // velocity (m/s)
+    float m_sympDt{1.0f};   // fixed step (s)
+    double m_sympAccum{0.0};
+
+    void DropCubeAnalytic()
+    {
+        // Compute "up" from the physics gravity so the cube drops toward the plane
         const glmvec3 gravityPhys{0.0f, m_physics.c_gravity, 0.0f};
         const glmvec3 gravityGame = fromPhysics(gravityPhys);
-        const glmvec3 upGame = -glm::normalize(gravityGame); // opposite of gravity
+        m_upGame = -glm::normalize(gravityGame); // opposite of gravity
 
-        // Spawn 100 meters above the ground origin
-        const float dropHeight = 100.0f; // meters
-        const glmvec3 spawnPos = dropHeight * upGame;
+        // Start height and spawn position
+        m_dropHeight = 100.0f;
+        m_analyticA = 9.81f;
+        m_analyticT = 0.0f;
+        const glmvec3 spawnPos = m_dropHeight * m_upGame;
 
-        // Zero initial linear velocity for a pure drop
-        const glmvec3 vel{0.0f, 0.0f, 0.0f};
+        // Create or reuse a render-only cube (no physics body)
+        if (!m_analyticCube.IsValid())
+        {
+            m_analyticCube = m_engine.CreateScene(vve::Name{},
+                                                  vve::ParentHandle{},
+                                                  vve::Filename{cube_obj}, aiProcess_FlipWindingOrder,
+                                                  vve::Position{spawnPos},
+                                                  vve::Rotation{mat3_t{1.0f}},
+                                                  vve::Scale{vec3_t{1.0f}});
+        }
+        else
+        {
+            m_registry.Get<vve::Position &>(m_analyticCube)() = spawnPos;
+            m_registry.Get<vve::Rotation &>(m_analyticCube)() = mat3_t{1.0f};
+            m_registry.Get<vve::Scale &>(m_analyticCube)()    = vec3_t{1.0f};
+        }
 
-        // Keep simple orientation (no initial spin)
-        const glmvec3 scale{1.0f, 1.0f, 1.0f};
-        const float angle = 0.0f;
-        const glmvec3 orientAxis{0.0f, 1.0f, 0.0f};
-        const glmvec3 vrot{0.0f, 0.0f, 0.0f};
-
-        vecs::Handle handleCube = m_engine.CreateScene(vve::Name{},
-                                                       vve::ParentHandle{},
-                                                       vve::Filename{cube_obj}, aiProcess_FlipWindingOrder,
-                                                       vve::Position{{0.0f, 0.0f, 0.0f}},
-                                                       vve::Rotation{mat3_t{1.0f}},
-                                                       vve::Scale{vec3_t{1.0f}});
-
-        auto body = std::make_shared<vpe::VPEWorld::Body>(
-            &m_physics,
-            "Body" + std::to_string(m_physics.m_bodies.size()),
-            reinterpret_cast<void *>(handleCube.GetValue()),
-            &m_physics.g_cube,
-            scale,
-            toPhysics(spawnPos),
-            toPhysics(glm::rotate(glm::mat4{1.0f}, angle, glm::normalize(orientAxis))),
-            toPhysics(vel),
-            toPhysics(vrot),
-            1.0_real / 100.0_real,
-            m_physics.m_restitution,
-            m_physics.m_friction);
-
-        // Apply gravity from the physics world
-        body->setForce(0ul, vpe::VPEWorld::Force{gravityPhys});
-        body->m_on_move = onMove;
-        body->m_on_erase = onErase;
-
-        onMove(0.0, body);
-        m_physics.addBody(body);
-
-        // Analytic drop time for s = 100 m, a = 9.81 m/s^2
-        const float a = 9.81f;
-        const float t = std::sqrt(2.0f * dropHeight / a);
-        std::cout << std::format("Analytic drop time from {:.1f} m: {:.3f} s (a = {:.2f} m/s^2)\n",
-                                 dropHeight, t, a);
+        // Begin analytic fall
+        m_analyticActive = true;
     }
+
+    // New: Euler drop with configurable fixed step delta_t
+    void DropCubeEuler(float delta_t)
+    {
+        // Compute "up" exactly like DropCubeAnalytic does
+        const glmvec3 gravityPhys{0.0f, m_physics.c_gravity, 0.0f};
+        const glmvec3 gravityGame = fromPhysics(gravityPhys);
+        m_upGame = -glm::normalize(gravityGame);
+
+        // Start at 100 m, zero initial velocity
+        m_dropHeight = 100.0f;
+        m_eulerA = std::abs(m_physics.c_gravity);  // Use absolute value!
+        m_eulerDt = std::max(1e-6f, delta_t);
+        m_eulerT = 0.0f;
+        m_eulerH = m_dropHeight;
+        m_eulerV = 0.0f;
+        m_eulerAccum = 0.0;
+        const glmvec3 spawnPos = m_eulerH * m_upGame;
+
+        // Create or reuse a render-only cube (separate from analytic one)
+        if (!m_eulerCube.IsValid())
+        {
+            m_eulerCube = m_engine.CreateScene(vve::Name{},
+                                               vve::ParentHandle{},
+                                               vve::Filename{cube_obj}, aiProcess_FlipWindingOrder,
+                                               vve::Position{spawnPos},
+                                               vve::Rotation{mat3_t{1.0f}},
+                                               vve::Scale{vec3_t{1.0f}});
+        }
+        else
+        {
+            m_registry.Get<vve::Position &>(m_eulerCube)() = spawnPos;
+            m_registry.Get<vve::Rotation &>(m_eulerCube)() = mat3_t{1.0f};
+            m_registry.Get<vve::Scale &>(m_eulerCube)()    = vec3_t{1.0f};
+        }
+
+        m_eulerActive = true;
+    }
+
+    void DropCubeSymplectic(float delta_t)
+    {
+        // Compute "up" like the other variants
+        const glmvec3 gravityPhys{0.0f, m_physics.c_gravity, 0.0f};
+        const glmvec3 gravityGame = fromPhysics(gravityPhys);
+        m_upGame = -glm::normalize(gravityGame);
+
+        // Start at 100 m, zero initial velocity
+        m_dropHeight = 100.0f;
+        m_sympA = std::abs(m_physics.c_gravity);    // gravity magnitude
+        m_sympDt = std::max(1e-6f, delta_t);
+        m_sympT = 0.0f;
+        m_sympH = m_dropHeight;
+        m_sympV = 0.0f;
+        m_sympAccum = 0.0;
+
+        const glmvec3 spawnPos = m_sympH * m_upGame;
+
+        // Create or reuse a render-only cube
+        if (!m_sympCube.IsValid())
+        {
+            m_sympCube = m_engine.CreateScene(vve::Name{},
+                                              vve::ParentHandle{},
+                                              vve::Filename{cube_obj}, aiProcess_FlipWindingOrder,
+                                              vve::Position{spawnPos},
+                                              vve::Rotation{mat3_t{1.0f}},
+                                              vve::Scale{vec3_t{1.0f}});
+        }
+        else
+        {
+            m_registry.Get<vve::Position &>(m_sympCube)() = spawnPos;
+            m_registry.Get<vve::Rotation &>(m_sympCube)() = mat3_t{1.0f};
+            m_registry.Get<vve::Scale &>(m_sympCube)()    = vec3_t{1.0f};
+        }
+
+        m_sympActive = true;
+    }
+
 
 };
 int main()
