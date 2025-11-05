@@ -121,13 +121,14 @@ public:
         if (m_analyticActive && m_analyticCube.IsValid())
         {
             m_analyticT += static_cast<float>(dt);
-            float h = m_dropHeight - 0.5f * m_analyticA * m_analyticT * m_analyticT;
+            float h = m_dropHeight + 0.5f * m_physics.c_gravity * m_analyticT * m_analyticT;
+            std::cout << std::format("t = {:.3f} s, h = {:.3f} m\n", m_analyticT, h) << std::flush;
             if (h <= 0.0f)
             {
                 h = 0.0f;
                 m_analyticActive = false;
                 std::cout << std::format("Impact at t = {:.3f} s (a = {:.2f} m/s^2)\n",
-                                         m_analyticT, m_analyticA);
+                                         m_analyticT, m_analyticA)  << std::flush;
             }
             m_registry.Get<vve::Position &>(m_analyticCube)() = h * m_upGame;
         }
@@ -140,23 +141,30 @@ public:
             {
                 m_eulerAccum -= m_eulerDt;
 
-                // v' = -a, h' = v  (up-positive)
-                m_eulerV += -m_eulerA * m_eulerDt;   // update velocity
-                m_eulerH +=  m_eulerV * m_eulerDt;   // update height
-                m_eulerT +=  m_eulerDt;
+                // Explicit Euler:
+                // r_{n+1} = r_n + dt * v_n
+                // v_{n+1} = v_n + dt * a   (a = -g along up-axis)
+                m_eulerH += m_eulerV * m_eulerDt;
+                m_eulerV += m_physics.c_gravity * m_eulerDt;
+                m_eulerT += m_eulerDt;
 
                 if (m_eulerH <= 0.0f)
                 {
                     m_eulerH = 0.0f;
+                    m_eulerV = 0.0f;
                     m_eulerActive = false;
                     std::cout << std::format("Euler impact at t = {:.3f} s (dt = {:.3f} s)\n",
-                                             m_eulerT, m_eulerDt);
+                                             m_eulerT, m_eulerDt) << std::flush;
+                }
+                else
+                {
+                    std::cout << std::format("t = {:.3f} s, h = {:.3f} m\n",
+                                             m_eulerT, m_eulerH) << std::flush;
                 }
             }
             m_registry.Get<vve::Position &>(m_eulerCube)() = m_eulerH * m_upGame;
         }
-        
-        // --- Symplectic Euler fall update (v first, then h) ---
+
         if (m_sympActive && m_sympCube.IsValid())
         {
             m_sympAccum += dt;
@@ -164,18 +172,25 @@ public:
             {
                 m_sympAccum -= m_sympDt;
 
-                // v_{n+1} = v_n - a*dt
-                m_sympV += -m_sympA * m_sympDt;
-                // h_{n+1} = h_n + v_{n+1}*dt
+                // Symplectic Euler:
+                // v_{n+1} = v_n + dt * a
+                // r_{n+1} = r_n + dt * v_{n+1}
+                m_sympV +=  m_physics.c_gravity * m_sympDt;
                 m_sympH +=  m_sympV * m_sympDt;
                 m_sympT +=  m_sympDt;
 
                 if (m_sympH <= 0.0f)
                 {
                     m_sympH = 0.0f;
+                    m_sympV = 0.0f;
                     m_sympActive = false;
                     std::cout << std::format("Symplectic Euler impact at t = {:.3f} s (dt = {:.3f} s)\n",
-                                             m_sympT, m_sympDt);
+                                             m_sympT, m_sympDt) << std::flush;
+                }
+                else
+                {
+                    std::cout << std::format("t = {:.3f} s, h = {:.3f} m\n",
+                                             m_sympT, m_sympH) << std::flush;
                 }
             }
             m_registry.Get<vve::Position &>(m_sympCube)() = m_sympH * m_upGame;
@@ -203,11 +218,11 @@ public:
         }
         if (key == SDL_SCANCODE_K)
         {
-            DropCubeSymplectic(1.0f);   // change here to adjust dt easily
+            DropCubeSymplectic(1.0f);
         }
         if (key == SDL_SCANCODE_L)
         {
-            DropCubeSymplectic(0.001f);   // 0.1 s
+            DropCubeSymplectic(0.1f);
         }
 
         return false;
@@ -239,7 +254,7 @@ private:
     vecs::Handle m_cameraNodeHandle{};
     float m_volume{MIX_MAX_VOLUME / 2.0};
 
-    // --- Minimal analytic fall state ---
+    // --- analytic fall state ---
     vecs::Handle m_analyticCube{};
     bool  m_analyticActive{false};
     float m_analyticT{0.0f};
@@ -251,20 +266,18 @@ private:
     vecs::Handle m_eulerCube{};
     bool  m_eulerActive{false};
     float m_eulerT{0.0f};
-    float m_eulerA{9.81f};   // m/s^2 (downward)
-    float m_eulerH{0.0f};    // height above ground (m)
-    float m_eulerV{0.0f};    // vertical velocity (m/s), + is up
-    float m_eulerDt{1.0f};   // fixed step (s)
+    float m_eulerH{0.0f};
+    float m_eulerV{0.0f};
+    float m_eulerDt{1.0f};
     double m_eulerAccum{0.0};
 
     // --- Symplectic Euler state (semi-implicit Euler, fixed step delta_t) ---
     vecs::Handle m_sympCube{};
     bool  m_sympActive{false};
     float m_sympT{0.0f};
-    float m_sympA{9.81f};   // m/s^2
-    float m_sympH{0.0f};    // height (m)
-    float m_sympV{0.0f};    // velocity (m/s)
-    float m_sympDt{1.0f};   // fixed step (s)
+    float m_sympH{0.0f};
+    float m_sympV{0.0f};
+    float m_sympDt{1.0f};
     double m_sympAccum{0.0};
 
     void DropCubeAnalytic()
@@ -301,7 +314,6 @@ private:
         m_analyticActive = true;
     }
 
-    // New: Euler drop with configurable fixed step delta_t
     void DropCubeEuler(float delta_t)
     {
         // Compute "up" exactly like DropCubeAnalytic does
@@ -309,9 +321,7 @@ private:
         const glmvec3 gravityGame = fromPhysics(gravityPhys);
         m_upGame = -glm::normalize(gravityGame);
 
-        // Start at 100 m, zero initial velocity
         m_dropHeight = 100.0f;
-        m_eulerA = std::abs(m_physics.c_gravity);  // Use absolute value!
         m_eulerDt = std::max(1e-6f, delta_t);
         m_eulerT = 0.0f;
         m_eulerH = m_dropHeight;
@@ -341,14 +351,12 @@ private:
 
     void DropCubeSymplectic(float delta_t)
     {
-        // Compute "up" like the other variants
         const glmvec3 gravityPhys{0.0f, m_physics.c_gravity, 0.0f};
         const glmvec3 gravityGame = fromPhysics(gravityPhys);
         m_upGame = -glm::normalize(gravityGame);
 
         // Start at 100 m, zero initial velocity
-        m_dropHeight = 100.0f;
-        m_sympA = std::abs(m_physics.c_gravity);    // gravity magnitude
+        m_dropHeight = 100.0f;    // gravity magnitude
         m_sympDt = std::max(1e-6f, delta_t);
         m_sympT = 0.0f;
         m_sympH = m_dropHeight;
