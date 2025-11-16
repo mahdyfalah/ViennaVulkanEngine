@@ -450,6 +450,34 @@ namespace vpe {
 			}
 		};
 
+		/// <summary>
+		/// Simple regular tetrahedron polytope centered at origin, roughly unit-sized like the cube.
+		/// Uses 4 vertices, 6 edges and 4 triangular faces.
+		/// </summary>
+		inline static Polytope g_tetra {
+			// vertices (scaled by 0.5 so extents are ~[-0.5, 0.5])
+			{ {  0.5_real,  0.5_real,  0.5_real },
+			  {  0.5_real, -0.5_real, -0.5_real },
+			  { -0.5_real,  0.5_real, -0.5_real },
+			  { -0.5_real, -0.5_real,  0.5_real } },
+			// edges (pairs of vertex indices)
+			{ {0,1}, {1,2}, {2,0}, {0,3}, {3,1}, {2,3} },
+			// faces (lists of signed edges forming closed loops with consistent winding)
+			{   { {0, 1}, {1, 1}, {2, 1} },          // face (0,1,2)
+				{ {3, 1}, {4, 1}, {0,-1} },          // face (0,3,1)
+				{ {4,-1}, {5,-1}, {1,-1} },          // face (1,3,2)
+				{ {2,-1}, {5, 1}, {3,-1} }           // face (0,2,3)
+			},
+			// approximate inertia tensor: like cuboid formula but with 1/20 (regular tetra)
+			[](real mass, glmvec3& s) {
+				return mass * glmmat3{
+					{s.y * s.y + s.z * s.z, 0, 0},
+					{0, s.x * s.x + s.z * s.z, 0},
+					{0, 0, s.x * s.x + s.y * s.y}
+				} / 20.0_real;
+			}
+		};
+
 		//--------------------------------------------------------------------------------------------------
 		//Physics engine stuff
 
