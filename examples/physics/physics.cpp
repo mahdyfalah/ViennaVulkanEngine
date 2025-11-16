@@ -59,6 +59,7 @@ class MyGame : public vve::System {
 
         inline static std::string cube_obj  { "assets/test/crate0/cube.obj" };
         inline static std::string tetra_obj { "assets/standard/tetra.obj" };
+        inline static std::string sphere_obj { "assets/standard/sphere.obj" };
 
         bool OnLoadLevel( Message message ) {
             auto msg = message.template GetData<vve::System::MsgLoadLevel>();	
@@ -112,6 +113,10 @@ class MyGame : public vve::System {
 
             if( key == SDL_SCANCODE_T  ) {
                 throwTetra();
+            }
+
+            if( key == SDL_SCANCODE_N  ) {
+                throwSphere();
             }
 
 		    return false;
@@ -222,6 +227,50 @@ class MyGame : public vve::System {
             );
 
             body->setForce( 0ul, vpe::VPEWorld::Force{ {0, 2*m_physics.c_gravity, 0} } );
+            body->m_on_move = onMove;
+            body->m_on_erase = onErase;
+
+            onMove(0.0, body);
+            m_physics.addBody(body);
+        }
+
+        void throwSphere() {
+            static uint64_t body_id{0};
+            auto [pn, rn, sn, LtoPn] = m_registry.template Get<vve::Position&, vve::Rotation&, vve::Scale&, vve::LocalToParentMatrix>(m_cameraNodeHandle);
+            auto [pc, rc, sc, LtoPc] = m_registry.template Get<vve::Position&, vve::Rotation&, vve::Scale&, vve::LocalToParentMatrix>(m_cameraHandle);
+
+            glmvec3 dir{vec3_t{ LtoPn() * LtoPc() * vec4_t{0.0f, 0.0f, -1.0f, 0.0f} }};
+            glmvec3 vel = (30.0_real + 5.0_real * (real)rnd_unif(rnd_gen)) * dir / glm::length(dir);
+            glmvec3 scale{ 1.0f, 1.0f, 1.0f };  // Use same scale as cube for physics collision
+            float angle = (real)rnd_unif(rnd_gen) * 10 * 3 * (real)M_PI / 180.0_real;
+            glmvec3 orient{ rnd_unif(rnd_gen), rnd_unif(rnd_gen), rnd_unif(rnd_gen) };
+            glmvec3 vrot{ rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5 };
+
+            vecs::Handle handle = m_engine.CreateScene(
+                vve::Name{},
+                vve::ParentHandle{},
+                vve::Filename{sphere_obj}, aiProcess_FlipWindingOrder,
+                vve::Position{{0.0f, 0.0f, 0.0f}},
+                vve::Rotation{mat3_t{1.0f}},
+                vve::Scale{vec3_t{0.05f, 0.05f, 0.05f}}  // Visual scale smaller than physics
+            );
+
+            auto body = std::make_shared<vpe::VPEWorld::Body>(
+                &m_physics,
+                "Sphere" + std::to_string(m_physics.m_bodies.size()),
+                reinterpret_cast<void*>(handle.GetValue()),
+                &m_physics.g_sphere,
+                scale,  // Physics uses same scale as cube
+                vpe::toPhysics(pn()),
+                vpe::toPhysics(glm::rotate(glm::mat4{1.0f}, angle, glm::normalize(orient))),
+                vpe::toPhysics(vel),
+                vpe::toPhysics(vrot),
+                1.0_real / 100.0_real,
+                m_physics.m_restitution,
+                m_physics.m_friction
+            );
+
+            body->setForce( 0ul, vpe::VPEWorld::Force{ {0, m_physics.c_gravity, 0} } );
             body->m_on_move = onMove;
             body->m_on_erase = onErase;
 
