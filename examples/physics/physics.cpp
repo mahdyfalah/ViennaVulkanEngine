@@ -115,7 +115,7 @@ class MyGame : public vve::System {
                 throwTetra();
             }
 
-            if( key == SDL_SCANCODE_N  ) {
+            if( key == SDL_SCANCODE_C  ) {
                 throwSphere();
             }
 
@@ -182,7 +182,7 @@ class MyGame : public vve::System {
                 m_physics.m_friction
             );
 
-            body->setForce( 0ul, vpe::VPEWorld::Force{ {0, m_physics.c_gravity, 0} } );
+            body->setForce( 0ul, vpe::VPEWorld::Force{ {0, 1.5 * m_physics.c_gravity, 0} } );
             body->m_on_move = onMove;
             body->m_on_erase = onErase;
 
@@ -226,7 +226,7 @@ class MyGame : public vve::System {
                 m_physics.m_friction
             );
 
-            body->setForce( 0ul, vpe::VPEWorld::Force{ {0, 2*m_physics.c_gravity, 0} } );
+            body->setForce( 0ul, vpe::VPEWorld::Force{ {0, 1.5 * m_physics.c_gravity, 0} } );
             body->m_on_move = onMove;
             body->m_on_erase = onErase;
 
@@ -241,7 +241,7 @@ class MyGame : public vve::System {
 
             glmvec3 dir{vec3_t{ LtoPn() * LtoPc() * vec4_t{0.0f, 0.0f, -1.0f, 0.0f} }};
             glmvec3 vel = (30.0_real + 5.0_real * (real)rnd_unif(rnd_gen)) * dir / glm::length(dir);
-            glmvec3 scale{ 1.0f, 1.0f, 1.0f };  // Use same scale as cube for physics collision
+            glmvec3 scale{ 1.0f, 1.0f, 1.0f };
             float angle = (real)rnd_unif(rnd_gen) * 10 * 3 * (real)M_PI / 180.0_real;
             glmvec3 orient{ rnd_unif(rnd_gen), rnd_unif(rnd_gen), rnd_unif(rnd_gen) };
             glmvec3 vrot{ rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5 };
@@ -252,7 +252,7 @@ class MyGame : public vve::System {
                 vve::Filename{sphere_obj}, aiProcess_FlipWindingOrder,
                 vve::Position{{0.0f, 0.0f, 0.0f}},
                 vve::Rotation{mat3_t{1.0f}},
-                vve::Scale{vec3_t{0.05f, 0.05f, 0.05f}}  // Visual scale smaller than physics
+                vve::Scale{vec3_t{0.05f, 0.05f, 0.05f}}
             );
 
             auto body = std::make_shared<vpe::VPEWorld::Body>(
@@ -260,7 +260,7 @@ class MyGame : public vve::System {
                 "Sphere" + std::to_string(m_physics.m_bodies.size()),
                 reinterpret_cast<void*>(handle.GetValue()),
                 &m_physics.g_sphere,
-                scale,  // Physics uses same scale as cube
+                scale,
                 vpe::toPhysics(pn()),
                 vpe::toPhysics(glm::rotate(glm::mat4{1.0f}, angle, glm::normalize(orient))),
                 vpe::toPhysics(vel),
@@ -270,7 +270,7 @@ class MyGame : public vve::System {
                 m_physics.m_friction
             );
 
-            body->setForce( 0ul, vpe::VPEWorld::Force{ {0, m_physics.c_gravity, 0} } );
+            body->setForce( 0ul, vpe::VPEWorld::Force{ {0, 1.5 * m_physics.c_gravity, 0} } );
             body->m_on_move = onMove;
             body->m_on_erase = onErase;
 

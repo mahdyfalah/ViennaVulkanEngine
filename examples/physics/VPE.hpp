@@ -446,7 +446,11 @@ namespace vpe {
 				{ {1,-1}, {9, 1},  {7,-1}, {11, 1} }	//face 5
 			},
 			[](real mass, glmvec3& s) { //callback for calculating the inertia tensor of this polytope
-				return mass * glmmat3{ {s.y * s.y + s.z * s.z,0,0}, {0,s.x * s.x + s.z * s.z,0}, {0,0,s.x * s.x + s.y * s.y} } / 12.0_real;
+				return mass * glmmat3{ 
+					{s.y * s.y + s.z * s.z,0,0},
+					{0,s.x * s.x + s.z * s.z,0},
+					{0,0,s.x * s.x + s.y * s.y} 
+				} / 12.0_real;
 			}
 		};
 
@@ -455,20 +459,19 @@ namespace vpe {
 		/// Uses 4 vertices, 6 edges and 4 triangular faces.
 		/// </summary>
 		inline static Polytope g_tetra {
-			// vertices (scaled by 0.5 so extents are ~[-0.5, 0.5])
-			{ {  0.5_real,  0.5_real,  0.5_real },
-			  {  0.5_real, -0.5_real, -0.5_real },
-			  { -0.5_real,  0.5_real, -0.5_real },
-			  { -0.5_real, -0.5_real,  0.5_real } },
-			// edges (pairs of vertex indices)
-			{ {0,1}, {1,2}, {2,0}, {0,3}, {3,1}, {2,3} },
-			// faces (lists of signed edges forming closed loops with consistent winding)
-			{   { {0, 1}, {1, 1}, {2, 1} },          // face (0,1,2)
-				{ {3, 1}, {4, 1}, {0,-1} },          // face (0,3,1)
-				{ {4,-1}, {5,-1}, {1,-1} },          // face (1,3,2)
-				{ {2,-1}, {5, 1}, {3,-1} }           // face (0,2,3)
+			{ 
+				{  0.5_real,  0.5_real,  0.5_real },
+				{  0.5_real, -0.5_real, -0.5_real },
+				{ -0.5_real,  0.5_real, -0.5_real },
+				{ -0.5_real, -0.5_real,  0.5_real }
 			},
-			// approximate inertia tensor: like cuboid formula but with 1/20 (regular tetra)
+			{ {0,1}, {0,2}, {0,3}, {1,2}, {1,3}, {2,3} },
+			{   
+				{ {0, 1}, {3, 1}, {1,-1} },
+				{ {0,-1}, {2, 1}, {4,-1} },
+				{ {1, 1}, {5, 1}, {3,-1} },
+				{ {4, 1}, {5,-1}, {2,-1} }
+			},
 			[](real mass, glmvec3& s) {
 				return mass * glmmat3{
 					{s.y * s.y + s.z * s.z, 0, 0},
@@ -479,66 +482,33 @@ namespace vpe {
 		};
 
 		/// <summary>
-		/// Icosahedron polytope approximating a sphere, centered at origin, roughly unit-sized.
-		/// Uses 12 vertices, 30 edges and 20 triangular faces.
-		/// This is a good low-poly approximation of a sphere for physics collision.
-		/// Golden ratio based icosahedron for proper sphere approximation.
+		/// Octahedron as a simpler sphere approximation than icosahedron.
+		/// 6 vertices, 12 edges, 8 triangular faces
 		/// </summary>
 		inline static Polytope g_sphere {
-			// 12 vertices of a regular icosahedron using golden ratio
-			// phi = (1 + sqrt(5)) / 2 ≈ 1.618, scaled to unit sphere then to ~[-0.5, 0.5]
-			// Normalized to radius ~0.525 to match cube/tetra size better
 			{ 
-				{ -0.276_real,  0.447_real,  0.0_real },    // 0
-				{  0.276_real,  0.447_real,  0.0_real },    // 1
-				{ -0.276_real, -0.447_real,  0.0_real },    // 2
-				{  0.276_real, -0.447_real,  0.0_real },    // 3
-				{  0.0_real,   -0.276_real,  0.447_real },  // 4
-				{  0.0_real,    0.276_real,  0.447_real },  // 5
-				{  0.0_real,   -0.276_real, -0.447_real },  // 6
-				{  0.0_real,    0.276_real, -0.447_real },  // 7
-				{  0.447_real,  0.0_real,   -0.276_real },  // 8
-				{  0.447_real,  0.0_real,    0.276_real },  // 9
-				{ -0.447_real,  0.0_real,   -0.276_real },  // 10
-				{ -0.447_real,  0.0_real,    0.276_real }   // 11
+				{  1.0_real,  0.0_real,  0.0_real },  
+				{ -1.0_real,  0.0_real,  0.0_real },
+				{  0.0_real,  1.0_real,  0.0_real },
+				{  0.0_real, -1.0_real,  0.0_real },
+				{  0.0_real,  0.0_real,  1.0_real },
+				{  0.0_real,  0.0_real, -1.0_real }
 			},
-			// 30 edges connecting the vertices (proper icosahedron topology)
 			{ 
-				{0,1}, {0,5}, {0,7}, {0,10}, {0,11},        // 0-4: edges from vertex 0
-				{1,5}, {1,7}, {1,8}, {1,9},                 // 5-8: edges from vertex 1
-				{2,3}, {2,4}, {2,6}, {2,10}, {2,11},        // 9-13: edges from vertex 2
-				{3,4}, {3,6}, {3,8}, {3,9},                 // 14-17: edges from vertex 3
-				{4,5}, {4,9}, {4,11},                       // 18-20: edges from vertex 4
-				{5,9}, {5,11},                              // 21-22: edges from vertex 5
-				{6,7}, {6,8}, {6,10},                       // 23-25: edges from vertex 6
-				{7,8}, {7,10},                              // 26-27: edges from vertex 7
-				{8,9},                                      // 28: edges from vertex 8
-				{10,11}                                     // 29: edges from vertex 10
+				{0,2}, {0,3}, {0,4}, {0,5},   
+				{1,2}, {1,3}, {1,4}, {1,5},   
+				{2,4}, {2,5}, {3,4}, {3,5}     
 			},
-			// 20 triangular faces - validated icosahedron topology with consistent winding
 			{
-				{ {0, 1},  {5, 1},  {1,-1} },           // face 0: v0->v1->v5 
-				{ {2, 1},  {6,-1},  {1, 1} },           // face 1: v0->v7->v5
-				{ {2,-1},  {26, 1}, {3, 1} },           // face 2: v7->v0->v10
-				{ {3,-1},  {29, 1}, {4, 1} },           // face 3: v10->v0->v11
-				{ {4,-1},  {22, 1}, {1,-1} },           // face 4: v11->v0->v5
-				{ {5,-1},  {21, 1}, {0,-1} },           // face 5: v5->v1->v9
-				{ {6, 1},  {7, 1},  {5, 1} },           // face 6: v1->v7->v8
-				{ {7,-1},  {28, 1}, {8, 1} },           // face 7: v8->v1->v9
-				{ {26,-1}, {23, 1}, {2, 1} },           // face 8: v7->v10->v6
-				{ {27, 1},  {25,-1}, {3, 1} },          // face 9: v7->v6->v8
-				{ {18, 1},  {21,-1}, {22,-1} },         // face 10: v4->v5->v9
-				{ {18,-1}, {20, 1},  {13,-1} },         // face 11: v5->v4->v11
-				{ {19, 1},  {28,-1}, {21, 1} },         // face 12: v4->v9->v8
-				{ {19,-1}, {17, 1},  {14, 1} },         // face 13: v9->v4->v3
-				{ {10, 1},  {14,-1}, {20,-1} },         // face 14: v2->v4->v11
-				{ {10,-1}, {9, 1},   {17,-1} },         // face 15: v4->v2->v3
-				{ {11, 1},  {15, 1}, {9, 1} },          // face 16: v2->v6->v3
-				{ {11,-1}, {25, 1},  {12, 1} },         // face 17: v6->v2->v10
-				{ {16, 1},  {24,-1}, {15,-1} },         // face 18: v3->v8->v6
-				{ {12,-1}, {29,-1}, {13, 1} }           // face 19: v10->v2->v11
+				{ {0, 1}, {8, 1},  {2,-1} },
+				{ {0,-1}, {9, 1},  {3,-1} },
+				{ {1,-1}, {10,1},  {2, 1} },
+				{ {1, 1}, {11,1},  {3, 1} },
+				{ {4, 1}, {8,-1},  {6,-1} },
+				{ {4,-1}, {9,-1},  {7,-1} },
+				{ {5,-1}, {10,-1}, {6, 1} },
+				{ {5, 1}, {11,-1}, {7, 1} }
 			},
-			// inertia tensor for sphere: (2/5)*m*r^2 for all axes
 			[](real mass, glmvec3& s) {
 				real avg_radius_sq = (s.x * s.x + s.y * s.y + s.z * s.z) / 3.0_real;
 				real inertia_val = 0.4_real * mass * avg_radius_sq;
