@@ -91,6 +91,8 @@ class MyGame : public vve::System {
             GetCamera();
             m_registry.Get<vve::Rotation&>(m_cameraHandle)() = mat3_t{ glm::rotate(mat4_t{1.0f}, 3.14152f/2.0f, vec3_t{1.0f, 0.0f, 0.0f}) };
 
+            spawnFlockingBoxes();
+
 			//m_engine.PlaySound(vve::Filename{"assets/sounds/dance.mp3"}, -1, 50);
 			m_engine.SetVolume(m_volume);
             return false;
@@ -99,6 +101,9 @@ class MyGame : public vve::System {
         bool OnUpdate( Message& message ) {
             auto msg = message.template GetData<vve::System::MsgUpdate>();
             auto dt = msg.m_dt;
+            
+            updateFlocking();
+            
             m_physics.tick(dt);
             return false;
         }
@@ -107,17 +112,17 @@ class MyGame : public vve::System {
 			auto msg = message.template GetData<MsgKeyDown>();
 			auto key = msg.m_key;
 
-            if( key == SDL_SCANCODE_B  ) { 
-                throwCube();
-            }
+            // if( key == SDL_SCANCODE_B  ) { 
+            //     throwCube();
+            // }
 
-            if( key == SDL_SCANCODE_T  ) {
-                throwTetra();
-            }
+            // if( key == SDL_SCANCODE_T  ) {
+            //     throwTetra();
+            // }
 
-            if( key == SDL_SCANCODE_C  ) {
-                throwSphere();
-            }
+            // if( key == SDL_SCANCODE_C  ) {
+            //     throwSphere();
+            // }
 
 		    return false;
         }
@@ -125,7 +130,7 @@ class MyGame : public vve::System {
         bool OnRecordNextFrame(Message message) { 
 
             ImGui::Begin("Game State");
-            char buffer[100];
+            //char buffer[100];
             //std::snprintf(buffer, 100, "Time Left: %.2f s", m_time_left);
             //ImGui::TextUnformatted(buffer);
             //std::snprintf(buffer, 100, "Cubes Left: %d", m_cubes_left);
@@ -145,6 +150,61 @@ class MyGame : public vve::System {
 		vecs::Handle m_cameraHandle{};
 		vecs::Handle m_cameraNodeHandle{};
 		float m_volume{MIX_MAX_VOLUME / 2.0};
+
+        // Flocking boxes
+        std::vector<std::shared_ptr<vpe::VPEWorld::Body>> m_flocking_boxes;
+
+        // Spawn 10 boxes for flocking
+        void spawnFlockingBoxes() {
+            for(int i = 0; i < 10; i++) {
+                vecs::Handle h = m_engine.CreateScene(
+                    vve::Name{}, vve::ParentHandle{}, vve::Filename{cube_obj}, aiProcess_FlipWindingOrder,
+                    vve::Position{{0.0f, 0.0f, 0.0f}}, vve::Rotation{mat3_t{1.0f}}, vve::Scale{vec3_t{1.0f}}
+                );
+                
+                auto b = std::make_shared<vpe::VPEWorld::Body>(
+                    &m_physics, "Flock" + std::to_string(i), reinterpret_cast<void*>(h.GetValue()),
+                    &m_physics.g_cube, glmvec3{1.0f, 1.0f, 1.0f},
+                    vpe::toPhysics(glmvec3{-15.0f + i * 3.0f, 5.0f, 0.0f}),
+                    vpe::toPhysics(glm::mat4{1.0f}),
+                    vpe::toPhysics(glmvec3{0.0f, 0.0f, 0.0f}),
+                    vpe::toPhysics(glmvec3{0.0f, 0.0f, 0.0f}),
+                    0.01_real, m_physics.m_restitution, m_physics.m_friction
+                );
+                
+                b->m_on_move = onMove;
+                b->m_on_erase = onErase;
+                onMove(0.0, b);
+                m_physics.addBody(b);
+                m_flocking_boxes.push_back(b);
+            }
+        }
+
+        void updateFlocking() {
+            for(size_t i = 0; i < m_flocking_boxes.size(); i++) {
+                glmvec3 f{0, 0, 0};
+                glmvec3 p1 = vpe::fromPhysics(m_flocking_boxes[i]->m_positionW);
+                
+                // Compare with every other box
+                for(size_t j = 0; j < m_flocking_boxes.size(); j++) {
+                    if(i == j) continue;  // skip the box itself
+                    
+                    glmvec3 p2 = vpe::fromPhysics(m_flocking_boxes[j]->m_positionW);
+                    glmvec3 d = p2 - p1;
+                    float dist = glm::length(d);
+                    d = d / dist;   // normalize direction
+                    
+                    if(dist > 0.01f) {
+                        if(dist < 2.0f) f -= d * 1.0f;          // too close -> Repel
+                        else if(dist > 10.0f) f += d * 1.0f;    // too far -> Attract
+                    }
+                }
+                
+                // Apply the calculated force
+                m_flocking_boxes[i]->removeForce(1ul);
+                m_flocking_boxes[i]->setForce(1ul, vpe::VPEWorld::Force{vpe::toPhysics(f)});
+            }
+        }
 
         void throwCube() {
             static uint64_t body_id{0};
