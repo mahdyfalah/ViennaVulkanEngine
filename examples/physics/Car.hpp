@@ -41,7 +41,7 @@ public:
             vve::ParentHandle{},
             vve::Filename{"assets/standard/Ultracompact_Car.obj"},
             aiProcess_FlipUVs,  // Adjusted to fix polygon visibility
-            vve::Position{vec3_t{position.x, position.y + 1.0f, position.z}},  // Raised position to prevent clipping
+            vve::Position{vec3_t{position.x, position.y, position.z}},  // Raised position to prevent clipping
             vve::Rotation{mat3_t{glm::rotate(mat4_t{1.0f}, glm::radians(180.0f), vec3_t{0.0f, 1.0f, 0.0f})}}  // Rotate 180° to fix forward/backward direction
         );
 
@@ -90,9 +90,9 @@ public:
     void HandleInput(float dt, bool forward, bool backward, bool left, bool right) {
         if (!m_isPlayer || !m_isAlive) return;
 
-        const float acceleration = 15.0f;   // Forward/backward acceleration
+        const float acceleration = 150.0f;   // Forward/backward acceleration
         const float turnSpeed = 2.5f;       // Rotation speed (radians/sec)
-        const float maxSpeed = 20.0f;       // Maximum speed
+        const float maxSpeed = 2000.0f;       // Maximum speed
         const float drag = 0.95f;           // Friction/air resistance
 
         // Get current velocity in physics space
