@@ -7,6 +7,7 @@
 #include "VEInclude.h"
 
 #include "VPE.hpp"
+#include "Car.hpp"
 
 
 class MyGame : public vve::System {
@@ -16,12 +17,11 @@ class MyGame : public vve::System {
 
     public:
         MyGame( vve::Engine& engine ) : vve::System("MyGame", engine ) {
-            m_static_registry = &m_registry;
-
             m_engine.RegisterCallbacks( { 
                 {this,      0, "LOAD_LEVEL", [this](Message& message){ return OnLoadLevel(message);} },
                 {this,  10000, "UPDATE", [this](Message& message){ return OnUpdate(message);} },
 			    {this,      0, "SDL_KEY_DOWN", [this](Message& message){ return OnKeyDown(message);} },
+			    {this,      0, "SDL_KEY_UP", [this](Message& message){ return OnKeyUp(message);} },
                 {this, -10000, "RECORD_NEXT_FRAME", [this](Message& message){ return OnRecordNextFrame(message);} }
             } );
             m_engine.SetVolume(m_volume);
@@ -37,34 +37,13 @@ class MyGame : public vve::System {
             };
         }
 
-        inline static vecs::Registry* m_static_registry{};
-        vpe::VPEWorld::callback_move onMove = [&](double dt, std::shared_ptr<vpe::VPEWorld::Body> body) {
-            auto pos = body->m_positionW;													// New position of the scene node
-	        auto orient = body->m_orientationLW;											// New orientation of the scende node
-	        body->stepPosition(dt, pos, orient, false);										// Extrapolate
-            auto model = vpe::VPEWorld::Body::computeModel(pos, orient, body->m_scale);
-	        vecs::Handle node = vecs::Handle(reinterpret_cast<size_t>(body->m_owner));		// Owner is a handle to a scene node
-            m_registry.Put(node, vve::Position(vpe::fromPhysics(pos)), vve::Rotation(vpe::fromPhysics(toMat3(orient))));
-        };
-
-        inline static vpe::VPEWorld::callback_erase onErase = [&](std::shared_ptr<vpe::VPEWorld::Body> body) {
-	        auto node = vecs::Handle(reinterpret_cast<size_t>(body->m_owner));					// Owner is a pointer to a scene node
-	        //getSceneManagerPointer()->deleteSceneNodeAndChildren(((VESceneNode*)body->m_owner)->getName());
-            return;
-        };
-    
         inline static std::string plane_obj  { "assets/test/plane/plane_t_n_s.obj" };
         inline static std::string plane_mesh { "assets/test/plane/plane_t_n_s.obj/plane" };
         inline static std::string plane_txt  { "assets/test/plane/grass.jpg" };
 
-        inline static std::string cube_obj  { "assets/test/crate0/cube.obj" };
-        inline static std::string tetra_obj { "assets/standard/tetra.obj" };
-        inline static std::string sphere_obj { "assets/standard/sphere.obj" };
-
         bool OnLoadLevel( Message message ) {
             auto msg = message.template GetData<vve::System::MsgLoadLevel>();	
             std::cout << "Loading level: " << msg.m_level << std::endl;
-            std::string level = std::string("Level: ") + msg.m_level;
 
             // ----------------- Load Plane -----------------
 
@@ -79,21 +58,39 @@ class MyGame : public vve::System {
 									vve::Scale{vec3_t{1000.0f, 1000.0f, 1000.0f}}, 
 									vve::UVScale{vec2_t{1000.0f, 1000.0f}});
 
-            // ----------------- Load Cube -----------------
-
-			//m_handleCube = m_engine.CreateScene(vve::Name{}, 
-            //                            vve::ParentHandle{}, 
-            //                            vve::Filename{cube_obj}, aiProcess_FlipWindingOrder, 
-			//							  vve::Position{{nextRandom(), nextRandom(), 0.5f}}, 
-            //                            vve::Rotation{mat3_t{1.0f}}, 
-            //                            vve::Scale{vec3_t{1.0f}});
+            // ----------------- Setup Camera -----------------
 
             GetCamera();
-            m_registry.Get<vve::Rotation&>(m_cameraHandle)() = mat3_t{ glm::rotate(mat4_t{1.0f}, 3.14152f/2.0f, vec3_t{1.0f, 0.0f, 0.0f}) };
+            
+            // Set up isometric camera - looking down at 45° angle from above
+            // Position camera high and back from the origin
+            auto [pn, rn] = m_registry.template Get<vve::Position&, vve::Rotation&>(m_cameraNodeHandle);
+            pn() = vec3_t{0.0f, -20.0f, 30.0f};  // High above the play area
+            
+            // Rotate camera to look down at 45° angle (isometric view)
+            m_registry.Get<vve::Rotation&>(m_cameraHandle)() = mat3_t{ 
+                glm::rotate(mat4_t{1.0f}, glm::radians(45.0f), vec3_t{1.0f, 0.0f, 0.0f}) 
+            };
 
-            spawnFlockingBoxes();
+            // ----------------- Create Player Car -----------------
+            
+            m_playerCar.Create(m_engine, &m_physics, &m_registry, 
+                              glmvec3{0.0f, 2.0f, 0.0f},  // Center of play area, 2 units up
+                              true,  // isPlayer
+                              vec3_t{0.0f, 1.0f, 0.0f}); // Green color
 
-			//m_engine.PlaySound(vve::Filename{"assets/sounds/dance.mp3"}, -1, 50);
+            // Debug: Print positions
+            std::cout << "\n=== SPAWN DEBUG ==="<< std::endl;
+            std::cout << "Camera Node Position: (" << pn().x << ", " << pn().y << ", " << pn().z << ")" << std::endl;
+            std::cout << "Car Spawn Request: (0, 2, 0)" << std::endl;
+            auto carPos = m_playerCar.GetPosition();
+            std::cout << "Car Actual Position: (" << carPos.x << ", " << carPos.y << ", " << carPos.z << ")" << std::endl;
+            std::cout << "Distance from camera: " << glm::length(vec3_t{pn().x - carPos.x, pn().y - carPos.y, pn().z - carPos.z}) << std::endl;
+            std::cout << "==================\n" << std::endl;
+
+            // TODO: Spawn 3 AI cars
+            // Will be implemented later with AI behaviors
+
 			m_engine.SetVolume(m_volume);
             return false;
         };
@@ -102,7 +99,13 @@ class MyGame : public vve::System {
             auto msg = message.template GetData<vve::System::MsgUpdate>();
             auto dt = msg.m_dt;
             
-            updateFlocking();
+            // Update player car with input
+            m_playerCar.HandleInput((float)dt, m_keyW, m_keyS, m_keyA, m_keyD);
+            
+            // Update AI cars
+            for (auto& aiCar : m_aiCars) {
+                aiCar.UpdateAI((float)dt);
+            }
             
             m_physics.tick(dt);
             return false;
@@ -112,17 +115,26 @@ class MyGame : public vve::System {
 			auto msg = message.template GetData<MsgKeyDown>();
 			auto key = msg.m_key;
 
-            // if( key == SDL_SCANCODE_B  ) { 
-            //     throwCube();
-            // }
+            // Player car controls - WASD
+            if (key == SDL_SCANCODE_W) m_keyW = true;
+            if (key == SDL_SCANCODE_A) m_keyA = true;
+            if (key == SDL_SCANCODE_S) m_keyS = true;
+            if (key == SDL_SCANCODE_D) m_keyD = true;
 
-            // if( key == SDL_SCANCODE_T  ) {
-            //     throwTetra();
-            // }
+            // TODO: Space bar for shooting
 
-            // if( key == SDL_SCANCODE_C  ) {
-            //     throwSphere();
-            // }
+		    return false;
+        }
+        
+        bool OnKeyUp(Message message) {
+			auto msg = message.template GetData<MsgKeyUp>();
+			auto key = msg.m_key;
+
+            // Release player car controls
+            if (key == SDL_SCANCODE_W) m_keyW = false;
+            if (key == SDL_SCANCODE_A) m_keyA = false;
+            if (key == SDL_SCANCODE_S) m_keyS = false;
+            if (key == SDL_SCANCODE_D) m_keyD = false;
 
 		    return false;
         }
@@ -130,11 +142,25 @@ class MyGame : public vve::System {
         bool OnRecordNextFrame(Message message) { 
 
             ImGui::Begin("Game State");
-            //char buffer[100];
-            //std::snprintf(buffer, 100, "Time Left: %.2f s", m_time_left);
-            //ImGui::TextUnformatted(buffer);
-            //std::snprintf(buffer, 100, "Cubes Left: %d", m_cubes_left);
-            //ImGui::TextUnformatted(buffer);
+            
+            // Display player car info
+            auto playerPos = m_playerCar.GetPosition();
+            ImGui::Text("Player Position: (%.1f, %.1f, %.1f)", playerPos.x, playerPos.y, playerPos.z);
+            ImGui::Text("Player Rotation: %.2f rad", m_playerCar.GetRotation());
+            
+            // Display AI car count
+            int aliveAI = 0;
+            for (const auto& ai : m_aiCars) {
+                if (ai.IsAlive()) aliveAI++;
+            }
+            ImGui::Text("AI Cars Remaining: %d / %d", aliveAI, (int)m_aiCars.size());
+            
+            ImGui::Separator();
+            ImGui::Text("Controls:");
+            ImGui::Text("  WASD - Drive");
+            ImGui::Text("  Space - Shoot (TODO)");
+            
+            ImGui::Separator();
         	if (ImGui::SliderFloat("Sound Volume", &m_volume, 0, MIX_MAX_VOLUME)) {
 		    	m_engine.SetVolume(m_volume);
 			}
@@ -144,206 +170,25 @@ class MyGame : public vve::System {
 
     private:
     	vpe::VPEWorld m_physics;
-
+        Car m_playerCar;
+        std::vector<Car> m_aiCars;
+        
+        // Input state
+        bool m_keyW = false;
+        bool m_keyA = false;
+        bool m_keyS = false;
+        bool m_keyD = false;
+        
         vecs::Handle m_handlePlane{};
-        vecs::Handle m_handleCube{};
-		vecs::Handle m_cameraHandle{};
-		vecs::Handle m_cameraNodeHandle{};
-		float m_volume{MIX_MAX_VOLUME / 2.0};
-
-        // Flocking boxes
-        std::vector<std::shared_ptr<vpe::VPEWorld::Body>> m_flocking_boxes;
-
-        // Spawn 10 boxes for flocking
-        void spawnFlockingBoxes() {
-            for(int i = 0; i < 10; i++) {
-                vecs::Handle h = m_engine.CreateScene(
-                    vve::Name{}, vve::ParentHandle{}, vve::Filename{cube_obj}, aiProcess_FlipWindingOrder,
-                    vve::Position{{0.0f, 0.0f, 0.0f}}, vve::Rotation{mat3_t{1.0f}}, vve::Scale{vec3_t{1.0f}}
-                );
-                
-                auto b = std::make_shared<vpe::VPEWorld::Body>(
-                    &m_physics, "Flock" + std::to_string(i), reinterpret_cast<void*>(h.GetValue()),
-                    &m_physics.g_cube, glmvec3{1.0f, 1.0f, 1.0f},
-                    vpe::toPhysics(glmvec3{-15.0f + i * 3.0f, 5.0f, 0.0f}),
-                    vpe::toPhysics(glm::mat4{1.0f}),
-                    vpe::toPhysics(glmvec3{0.0f, 0.0f, 0.0f}),
-                    vpe::toPhysics(glmvec3{0.0f, 0.0f, 0.0f}),
-                    0.01_real, m_physics.m_restitution, m_physics.m_friction
-                );
-                
-                b->m_on_move = onMove;
-                b->m_on_erase = onErase;
-                onMove(0.0, b);
-                m_physics.addBody(b);
-                m_flocking_boxes.push_back(b);
-            }
-        }
-
-        void updateFlocking() {
-            for(size_t i = 0; i < m_flocking_boxes.size(); i++) {
-                glmvec3 f{0, 0, 0};
-                glmvec3 p1 = vpe::fromPhysics(m_flocking_boxes[i]->m_positionW);
-                
-                // Compare with every other box
-                for(size_t j = 0; j < m_flocking_boxes.size(); j++) {
-                    if(i == j) continue;  // skip the box itself
-                    
-                    glmvec3 p2 = vpe::fromPhysics(m_flocking_boxes[j]->m_positionW);
-                    glmvec3 d = p2 - p1;
-                    float dist = glm::length(d);
-                    d = d / dist;   // normalize direction
-                    
-                    if(dist > 0.01f) {
-                        if(dist < 2.0f) f -= d * 1.0f;          // too close -> Repel
-                        else if(dist > 10.0f) f += d * 1.0f;    // too far -> Attract
-                    }
-                }
-                
-                // Apply the calculated force
-                m_flocking_boxes[i]->removeForce(1ul);
-                m_flocking_boxes[i]->setForce(1ul, vpe::VPEWorld::Force{vpe::toPhysics(f)});
-            }
-        }
-
-        void throwCube() {
-            static uint64_t body_id{0};
-            auto [pn, rn, sn, LtoPn] = m_registry.template Get<vve::Position&, vve::Rotation&, vve::Scale&, vve::LocalToParentMatrix>(m_cameraNodeHandle);
-            auto [pc, rc, sc, LtoPc] = m_registry.template Get<vve::Position&, vve::Rotation&, vve::Scale&, vve::LocalToParentMatrix>(m_cameraHandle);
-
-            glmvec3 dir{vec3_t{ LtoPn() * LtoPc() * vec4_t{0.0f, 0.0f, -1.0f, 0.0f} }};
-            glmvec3 vel = (30.0_real + 5.0_real * (real)rnd_unif(rnd_gen)) * dir / glm::length(dir);
-            glmvec3 scale{ 1,1,1 };
-            float angle = (real)rnd_unif(rnd_gen) * 10 * 3 * (real)M_PI / 180.0_real;
-            glmvec3 orient{ rnd_unif(rnd_gen), rnd_unif(rnd_gen), rnd_unif(rnd_gen) };
-            glmvec3 vrot{ rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5 };
-
-            vecs::Handle handle = m_engine.CreateScene(
-                vve::Name{},
-                vve::ParentHandle{},
-                vve::Filename{cube_obj}, aiProcess_FlipWindingOrder,
-                vve::Position{{0.0f, 0.0f, 0.0f}},
-                vve::Rotation{mat3_t{1.0f}},
-                vve::Scale{vec3_t{1.0f}}
-            );
-
-            auto body = std::make_shared<vpe::VPEWorld::Body>(
-                &m_physics,
-                "Body" + std::to_string(m_physics.m_bodies.size()),
-                reinterpret_cast<void*>(handle.GetValue()),
-                &m_physics.g_cube,
-                scale,
-                vpe::toPhysics(pn()),
-                vpe::toPhysics(glm::rotate(glm::mat4{1.0f}, angle, glm::normalize(orient))),
-                vpe::toPhysics(vel),
-                vpe::toPhysics(vrot),
-                1.0_real / 100.0_real,
-                m_physics.m_restitution,
-                m_physics.m_friction
-            );
-
-            body->setForce( 0ul, vpe::VPEWorld::Force{ {0, 1.5 * m_physics.c_gravity, 0} } );
-            body->m_on_move = onMove;
-            body->m_on_erase = onErase;
-
-            onMove(0.0, body);
-            m_physics.addBody(body);
-        }
-
-        void throwTetra() {
-            static uint64_t body_id{0};
-            auto [pn, rn, sn, LtoPn] = m_registry.template Get<vve::Position&, vve::Rotation&, vve::Scale&, vve::LocalToParentMatrix>(m_cameraNodeHandle);
-            auto [pc, rc, sc, LtoPc] = m_registry.template Get<vve::Position&, vve::Rotation&, vve::Scale&, vve::LocalToParentMatrix>(m_cameraHandle);
-
-            glmvec3 dir{vec3_t{ LtoPn() * LtoPc() * vec4_t{0.0f, 0.0f, -1.0f, 0.0f} }};
-            glmvec3 vel = (30.0_real + 5.0_real * (real)rnd_unif(rnd_gen)) * dir / glm::length(dir);
-            glmvec3 scale{ 1,1,1 };
-            float angle = (real)rnd_unif(rnd_gen) * 10 * 3 * (real)M_PI / 180.0_real;
-            glmvec3 orient{ rnd_unif(rnd_gen), rnd_unif(rnd_gen), rnd_unif(rnd_gen) };
-            glmvec3 vrot{ rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5 };
-
-            vecs::Handle handle = m_engine.CreateScene(
-                vve::Name{},
-                vve::ParentHandle{},
-                vve::Filename{tetra_obj}, aiProcess_FlipWindingOrder,
-                vve::Position{{0.0f, 0.0f, 0.0f}},
-                vve::Rotation{mat3_t{1.0f}},
-                vve::Scale{vec3_t{1.0f}}
-            );
-
-            auto body = std::make_shared<vpe::VPEWorld::Body>(
-                &m_physics,
-                "Tetra" + std::to_string(m_physics.m_bodies.size()),
-                reinterpret_cast<void*>(handle.GetValue()),
-                &m_physics.g_tetra,
-                scale,
-                vpe::toPhysics(pn()),
-                vpe::toPhysics(glm::rotate(glm::mat4{1.0f}, angle, glm::normalize(orient))),
-                vpe::toPhysics(vel),
-                vpe::toPhysics(vrot),
-                1.0_real / 100.0_real,
-                m_physics.m_restitution,
-                m_physics.m_friction
-            );
-
-            body->setForce( 0ul, vpe::VPEWorld::Force{ {0, 1.5 * m_physics.c_gravity, 0} } );
-            body->m_on_move = onMove;
-            body->m_on_erase = onErase;
-
-            onMove(0.0, body);
-            m_physics.addBody(body);
-        }
-
-        void throwSphere() {
-            static uint64_t body_id{0};
-            auto [pn, rn, sn, LtoPn] = m_registry.template Get<vve::Position&, vve::Rotation&, vve::Scale&, vve::LocalToParentMatrix>(m_cameraNodeHandle);
-            auto [pc, rc, sc, LtoPc] = m_registry.template Get<vve::Position&, vve::Rotation&, vve::Scale&, vve::LocalToParentMatrix>(m_cameraHandle);
-
-            glmvec3 dir{vec3_t{ LtoPn() * LtoPc() * vec4_t{0.0f, 0.0f, -1.0f, 0.0f} }};
-            glmvec3 vel = (30.0_real + 5.0_real * (real)rnd_unif(rnd_gen)) * dir / glm::length(dir);
-            glmvec3 scale{ 1.0f, 1.0f, 1.0f };
-            float angle = (real)rnd_unif(rnd_gen) * 10 * 3 * (real)M_PI / 180.0_real;
-            glmvec3 orient{ rnd_unif(rnd_gen), rnd_unif(rnd_gen), rnd_unif(rnd_gen) };
-            glmvec3 vrot{ rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5, rnd_unif(rnd_gen) * 5 };
-
-            vecs::Handle handle = m_engine.CreateScene(
-                vve::Name{},
-                vve::ParentHandle{},
-                vve::Filename{sphere_obj}, aiProcess_FlipWindingOrder,
-                vve::Position{{0.0f, 0.0f, 0.0f}},
-                vve::Rotation{mat3_t{1.0f}},
-                vve::Scale{vec3_t{0.05f, 0.05f, 0.05f}}
-            );
-
-            auto body = std::make_shared<vpe::VPEWorld::Body>(
-                &m_physics,
-                "Sphere" + std::to_string(m_physics.m_bodies.size()),
-                reinterpret_cast<void*>(handle.GetValue()),
-                &m_physics.g_sphere,
-                scale,
-                vpe::toPhysics(pn()),
-                vpe::toPhysics(glm::rotate(glm::mat4{1.0f}, angle, glm::normalize(orient))),
-                vpe::toPhysics(vel),
-                vpe::toPhysics(vrot),
-                1.0_real / 100.0_real,
-                m_physics.m_restitution,
-                m_physics.m_friction
-            );
-
-            body->setForce( 0ul, vpe::VPEWorld::Force{ {0, 1.5 * m_physics.c_gravity, 0} } );
-            body->m_on_move = onMove;
-            body->m_on_erase = onErase;
-
-            onMove(0.0, body);
-            m_physics.addBody(body);
-        }
+        vecs::Handle m_cameraHandle{};
+        vecs::Handle m_cameraNodeHandle{};
+        float m_volume{MIX_MAX_VOLUME / 2.0};
     };
     
     
-    
     int main() {
-        vve::Engine engine("My Engine", vve::RendererType::RENDERER_TYPE_FORWARD) ;
-        MyGame mygui{engine};  
+        vve::Engine engine("My Engine", vve::RendererType::RENDERER_TYPE_FORWARD);
+        MyGame mygame{engine};  
         engine.Run();
     
         return 0;

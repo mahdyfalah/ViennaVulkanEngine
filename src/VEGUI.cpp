@@ -60,29 +60,31 @@ namespace vve {
 
 		int dx{0}, dy{0};
 		switch( key )  {
-			case SDL_SCANCODE_W : { translate = vec3_t{ LtoPn() * LtoPc() * vec4_t{0.0f, 0.0f, -1.0f, 0.0f} }; break; }
-			case SDL_SCANCODE_S : { translate = vec3_t{ LtoPn() * LtoPc() * vec4_t{0.0f, 0.0f, 1.0f, 0.0f} }; break; }
-			case SDL_SCANCODE_A : { translate = vec3_t{ LtoPn() * LtoPc() * vec4_t{-1.0f, 0.0f, 0.0f, 0.0f} }; break; }
-			case SDL_SCANCODE_D : { translate = vec3_t{ LtoPn() * LtoPc() * vec4_t{1.0f, 0.0f, 0.0f, 0.0f} }; break; }
-			case SDL_SCANCODE_Q : { translate = vec3_t(0.0f, 0.0f, -1.0f); break; }
-			case SDL_SCANCODE_E : { translate = vec3_t(0.0f, 0.0f, 1.0f); break; }
-			case SDL_SCANCODE_LEFT : { dx=-1; break; }
-			case SDL_SCANCODE_RIGHT : { dx=1; break; }
-			case SDL_SCANCODE_UP : { dy=1; break; }
-			case SDL_SCANCODE_DOWN : { dy=-1; break; }
+			// === CAMERA MOVEMENT DISABLED FOR ISOMETRIC VIEW ===
+			// Uncomment these if you want free camera movement:
+			// case SDL_SCANCODE_W : { translate = vec3_t{ LtoPn() * LtoPc() * vec4_t{0.0f, 0.0f, -1.0f, 0.0f} }; break; }  // Move forward
+			// case SDL_SCANCODE_S : { translate = vec3_t{ LtoPn() * LtoPc() * vec4_t{0.0f, 0.0f, 1.0f, 0.0f} }; break; }   // Move backward
+			// case SDL_SCANCODE_A : { translate = vec3_t{ LtoPn() * LtoPc() * vec4_t{-1.0f, 0.0f, 0.0f, 0.0f} }; break; }  // Move left
+			// case SDL_SCANCODE_D : { translate = vec3_t{ LtoPn() * LtoPc() * vec4_t{1.0f, 0.0f, 0.0f, 0.0f} }; break; }   // Move right
+			// case SDL_SCANCODE_Q : { translate = vec3_t(0.0f, 0.0f, -1.0f); break; }  // Move down (world Z)
+			// case SDL_SCANCODE_E : { translate = vec3_t(0.0f, 0.0f, 1.0f); break; }   // Move up (world Z)
+			// case SDL_SCANCODE_LEFT : { dx=-1; break; }   // Rotate left
+			// case SDL_SCANCODE_RIGHT : { dx=1; break; }   // Rotate right
+			// case SDL_SCANCODE_UP : { dy=1; break; }      // Rotate up
+			// case SDL_SCANCODE_DOWN : { dy=-1; break; }   // Rotate down
 		}
 
-		float speed = m_shiftPressed ? 20.0f : 10.0f; ///add the new translation vector to the previous one
-		pn() = pn() + translate * (real_t)dt * speed;
-
-		float rotSpeed = m_shiftPressed ? 2.0f : 1.0f;
-		angle1 = rotSpeed * (float)dt * -dx; //left right
-		axis1 = glm::vec3(0.0, 0.0, 1.0);
-		rn() = mat3_t{ glm::rotate(mat4_t{1.0f}, angle1, axis1) * mat4_t{ rn() } };
-
-		angle2 = rotSpeed * (float)dt * -dy; //up down
-		axis2 = vec3_t{ LtoPc() * vec4_t{1.0f, 0.0f, 0.0f, 0.0f} };
-		rc() = mat3_t{ glm::rotate(mat4_t{1.0f}, angle2, axis2) * mat4_t{ rc() } };
+		// === CAMERA MOVEMENT CODE DISABLED ===
+		// Camera is fixed for isometric view
+		// float speed = m_shiftPressed ? 20.0f : 10.0f;
+		// pn() = pn() + translate * (real_t)dt * speed;
+		// float rotSpeed = m_shiftPressed ? 2.0f : 1.0f;
+		// angle1 = rotSpeed * (float)dt * -dx;
+		// axis1 = glm::vec3(0.0, 0.0, 1.0);
+		// rn() = mat3_t{ glm::rotate(mat4_t{1.0f}, angle1, axis1) * mat4_t{ rn() } };
+		// angle2 = rotSpeed * (float)dt * -dy;
+		// axis2 = vec3_t{ LtoPc() * vec4_t{1.0f, 0.0f, 0.0f, 0.0f} };
+		// rc() = mat3_t{ glm::rotate(mat4_t{1.0f}, angle2, axis2) * mat4_t{ rc() } };
 
 		glm::vec4 ctopp = LtoPc()[3];
 		glm::vec4 ptppp = LtoPn()[3];
