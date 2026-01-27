@@ -8,6 +8,7 @@
 
 #include "VPE.hpp"
 #include "Car.hpp"
+#include "GameMap.hpp"
 
 
 class MyGame : public vve::System {
@@ -75,18 +76,23 @@ class MyGame : public vve::System {
             // ----------------- Create Player Car -----------------
             
             m_playerCar.Create(m_engine, &m_physics, &m_registry, 
-                              glmvec3{0.0f, 2.0f, 0.0f},  // Center of play area, 2 units up
+                              glmvec3{0.0f, 0.0f, 0.0f},  // Center of play area
                               true,  // isPlayer
                               vec3_t{0.0f, 1.0f, 0.0f}); // Green color
 
             // Debug: Print positions
             std::cout << "\n=== SPAWN DEBUG ==="<< std::endl;
             std::cout << "Camera Node Position: (" << pn().x << ", " << pn().y << ", " << pn().z << ")" << std::endl;
-            std::cout << "Car Spawn Request: (0, 2, 0)" << std::endl;
+            std::cout << "Car Spawn Request: (0, 0, 0)" << std::endl;
             auto carPos = m_playerCar.GetPosition();
             std::cout << "Car Actual Position: (" << carPos.x << ", " << carPos.y << ", " << carPos.z << ")" << std::endl;
             std::cout << "Distance from camera: " << glm::length(vec3_t{pn().x - carPos.x, pn().y - carPos.y, pn().z - carPos.z}) << std::endl;
             std::cout << "==================\n" << std::endl;
+
+            // ----------------- Create Game Map with Walls -----------------
+            
+            m_gameMap.Create(m_engine, &m_physics, &m_registry, 50.0f);
+            std::cout << "Created north wall boundary" << std::endl;
 
             // TODO: Spawn 3 AI cars
             // Will be implemented later with AI behaviors
@@ -170,6 +176,7 @@ class MyGame : public vve::System {
 
     private:
     	vpe::VPEWorld m_physics;
+        GameMap m_gameMap;
         Car m_playerCar;
         std::vector<Car> m_aiCars;
         
