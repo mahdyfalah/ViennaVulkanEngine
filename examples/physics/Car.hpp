@@ -5,7 +5,7 @@
 #include "VPE.hpp"
 
 /**
- * @brief Car class for player and AI-controlled vehicles
+ * @brief Car class for player-controlled vehicle
  * Handles arcade-style driving physics with simple controls
  */
 class Car {
@@ -19,21 +19,15 @@ public:
      * @param physics Reference to the physics world
      * @param registry Reference to the entity registry
      * @param position Starting position
-     * @param isPlayer True for player car, false for AI
-     * @param colorMultiplier Color tint (for differentiating cars)
      */
     void Create(vve::Engine& engine, 
                 vpe::VPEWorld* physics, 
                 vecs::Registry* registry,
-                glmvec3 position,
-                bool isPlayer = false,
-                vec3_t colorMultiplier = vec3_t{1.0f, 1.0f, 1.0f}) {
+                glmvec3 position) {
         
         m_physics = physics;
         m_registry = registry;
-        m_isPlayer = isPlayer;
         m_isAlive = true;
-        m_colorMultiplier = colorMultiplier;
 
 // Create visual representation using Ultracompact_Car.obj
         m_sceneHandle = engine.CreateScene(
@@ -49,7 +43,7 @@ public:
         // Note: Body constructor expects glmquat for orientation, not mat4
         m_body = std::make_shared<vpe::VPEWorld::Body>(
             m_physics,
-            isPlayer ? "PlayerCar" : "AICar" + std::to_string(reinterpret_cast<size_t>(this)),
+            "PlayerCar",
             reinterpret_cast<void*>(m_sceneHandle.GetValue()),
             &m_physics->g_cube,
             glmvec3{3.5f, 2.0f, 2.0f},  // Physics box roughly matching sports car dimensions
@@ -88,7 +82,7 @@ public:
      * @param right D key pressed
      */
     void HandleInput(float dt, bool forward, bool backward, bool left, bool right) {
-        if (!m_isPlayer || !m_isAlive) return;
+        if (!m_isAlive) return;
 
         const float acceleration = 150.0f;   // Forward/backward acceleration
         const float turnSpeed = 2.5f;       // Rotation speed (radians/sec)
@@ -148,17 +142,6 @@ public:
     }
 
     /**
-     * @brief Update AI behavior (placeholder for now)
-     * @param dt Delta time
-     */
-    void UpdateAI(float dt) {
-        if (m_isPlayer || !m_isAlive) return;
-
-        // TODO: Implement AI behaviors (wander, flee, seek)
-        // For now, AI cars just sit still
-    }
-
-    /**
      * @brief Get car's current position
      */
     glmvec3 GetPosition() const {
@@ -206,13 +189,7 @@ private:
     std::shared_ptr<vpe::VPEWorld::Body> m_body;
 
     // Car state
-    bool m_isPlayer = false;
     bool m_isAlive = false;
     float m_speed = 0.0f;          // Current speed (forward/backward)
     float m_rotation = 0.0f;        // Current rotation angle (radians)
-    vec3_t m_colorMultiplier{1.0f}; // Color for differentiation
-
-    // AI state (for future use)
-    glmvec3 m_targetPosition{0.0f};
-    float m_wanderTimer = 0.0f;
 };

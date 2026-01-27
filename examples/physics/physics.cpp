@@ -8,6 +8,7 @@
 
 #include "VPE.hpp"
 #include "Car.hpp"
+#include "RubberDuck.hpp"
 #include "GameMap.hpp"
 
 
@@ -66,7 +67,7 @@ class MyGame : public vve::System {
             // Set up isometric camera - looking down at 45° angle from above
             // Position camera high and back from the origin
             auto [pn, rn] = m_registry.template Get<vve::Position&, vve::Rotation&>(m_cameraNodeHandle);
-            pn() = vec3_t{0.0f, -40.0f, 70.0f};  // High above the play area
+            pn() = vec3_t{0.0f, -60.0f, 120.0f};  // High above the play area
             
             // Rotate camera to look down at 45° angle (isometric view)
             m_registry.Get<vve::Rotation&>(m_cameraHandle)() = mat3_t{ 
@@ -76,9 +77,7 @@ class MyGame : public vve::System {
             // ----------------- Create Player Car -----------------
             
             m_playerCar.Create(m_engine, &m_physics, &m_registry, 
-                              glmvec3{0.0f, 0.0f, 0.0f},  // Center of play area
-                              true,  // isPlayer
-                              vec3_t{0.0f, 1.0f, 0.0f}); // Green color
+                              glmvec3{0.0f, 0.0f, 0.0f});  // Center of play area
 
             // Debug: Print positions
             std::cout << "\n=== SPAWN DEBUG ==="<< std::endl;
@@ -94,8 +93,27 @@ class MyGame : public vve::System {
             m_gameMap.Create(m_engine, &m_physics, &m_registry, 150.0f);
             std::cout << "Created north wall boundary" << std::endl;
 
-            // TODO: Spawn 3 AI cars
-            // Will be implemented later with AI behaviors
+            // ----------------- Spawn 3 AI Rubber Ducks with Different Colors -----------------
+            
+            m_rubberDucks.resize(3);
+            
+            // Rubber Duck 1 - Red (top-right)
+            m_rubberDucks[0].Create(m_engine, &m_physics, &m_registry,
+                                   glmvec3{40.0f, 40.0f, 0.0f},
+                                   vec3_t{1.0f, 0.2f, 0.2f});  // Red tint
+            std::cout << "Spawned Rubber Duck 1 (Red) at (40, 40, 0)" << std::endl;
+            
+            // Rubber Duck 2 - Blue (bottom-left)
+            m_rubberDucks[1].Create(m_engine, &m_physics, &m_registry,
+                                   glmvec3{-40.0f, -40.0f, 0.0f},
+                                   vec3_t{0.2f, 0.4f, 1.0f});  // Blue tint
+            std::cout << "Spawned Rubber Duck 2 (Blue) at (-40, -40, 0)" << std::endl;
+            
+            // Rubber Duck 3 - Yellow (top-left)
+            m_rubberDucks[2].Create(m_engine, &m_physics, &m_registry,
+                                   glmvec3{-40.0f, 40.0f, 0.0f},
+                                   vec3_t{1.0f, 1.0f, 0.2f});  // Yellow tint
+            std::cout << "Spawned Rubber Duck 3 (Yellow) at (-40, 40, 0)" << std::endl;
 
 			m_engine.SetVolume(m_volume);
             return false;
@@ -108,9 +126,13 @@ class MyGame : public vve::System {
             // Update player car with input
             m_playerCar.HandleInput((float)dt, m_keyW, m_keyS, m_keyA, m_keyD);
             
-            // Update AI cars
-            for (auto& aiCar : m_aiCars) {
-                aiCar.UpdateAI((float)dt);
+            // Get player position for AI targeting
+            glmvec3 playerPos = m_playerCar.GetPosition();
+            
+            // Update rubber ducks with player position as target
+            for (auto& duck : m_rubberDucks) {
+                duck.SetAITarget(playerPos);
+                duck.UpdateAI((float)dt);
             }
             
             m_physics.tick(dt);
@@ -154,12 +176,12 @@ class MyGame : public vve::System {
             ImGui::Text("Player Position: (%.1f, %.1f, %.1f)", playerPos.x, playerPos.y, playerPos.z);
             ImGui::Text("Player Rotation: %.2f rad", m_playerCar.GetRotation());
             
-            // Display AI car count
-            int aliveAI = 0;
-            for (const auto& ai : m_aiCars) {
-                if (ai.IsAlive()) aliveAI++;
+            // Display rubber duck count
+            int aliveDucks = 0;
+            for (const auto& duck : m_rubberDucks) {
+                if (duck.IsAlive()) aliveDucks++;
             }
-            ImGui::Text("AI Cars Remaining: %d / %d", aliveAI, (int)m_aiCars.size());
+            ImGui::Text("Rubber Ducks Remaining: %d / %d", aliveDucks, (int)m_rubberDucks.size());
             
             ImGui::Separator();
             ImGui::Text("Controls:");
@@ -178,7 +200,7 @@ class MyGame : public vve::System {
     	vpe::VPEWorld m_physics;
         GameMap m_gameMap;
         Car m_playerCar;
-        std::vector<Car> m_aiCars;
+        std::vector<RubberDuck> m_rubberDucks;
         
         // Input state
         bool m_keyW = false;
