@@ -66,7 +66,7 @@ class MyGame : public vve::System {
             // Set up isometric camera - looking down at 45° angle from above
             // Position camera high and back from the origin
             auto [pn, rn] = m_registry.template Get<vve::Position&, vve::Rotation&>(m_cameraNodeHandle);
-            pn() = vec3_t{0.0f, -20.0f, 30.0f};  // High above the play area
+            pn() = vec3_t{0.0f, -40.0f, 70.0f};  // High above the play area
             
             // Rotate camera to look down at 45° angle (isometric view)
             m_registry.Get<vve::Rotation&>(m_cameraHandle)() = mat3_t{ 
@@ -91,7 +91,7 @@ class MyGame : public vve::System {
 
             // ----------------- Create Game Map with Walls -----------------
             
-            m_gameMap.Create(m_engine, &m_physics, &m_registry, 50.0f);
+            m_gameMap.Create(m_engine, &m_physics, &m_registry, 150.0f);
             std::cout << "Created north wall boundary" << std::endl;
 
             // TODO: Spawn 3 AI cars

@@ -137,6 +137,14 @@ public:
         // Update rotation (orientation)
         glmmat4 rotMat = glm::rotate(glm::mat4{1.0f}, m_rotation, glmvec3{0.0f, 0.0f, 1.0f});
         m_body->m_orientationLW = vpe::toPhysics(rotMat);
+        
+        // Clamp position to stay within bounds (safety net to prevent escaping)
+        glmvec3 currentPos = m_body->m_positionW;
+        const float boundaryLimit = 73.0f;
+        currentPos.x = glm::clamp(currentPos.x, -boundaryLimit, boundaryLimit);
+        currentPos.y = glm::clamp(currentPos.y, -boundaryLimit, boundaryLimit);
+        currentPos.z = glm::clamp(currentPos.z, -boundaryLimit, boundaryLimit);
+        m_body->m_positionW = currentPos;
     }
 
     /**

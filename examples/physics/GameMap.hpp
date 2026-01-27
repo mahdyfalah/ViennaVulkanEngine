@@ -23,16 +23,24 @@ public:
     void Create(vve::Engine& engine, 
                 vpe::VPEWorld* physics, 
                 vecs::Registry* registry,
-                float playFieldSize = 50.0f) {
+                float playFieldSize = 200.0f) {
         
         m_physics = physics;
         m_registry = registry;
         m_playFieldSize = playFieldSize;
 
-        // Create north wall (positive Y direction)
-        CreateWall(engine, glmvec3{0.0f, playFieldSize, 0.0f}, glmvec3{playFieldSize * 2.0f, 5.0f, 5.0f});
+        // Create all four walls to enclose the playing field (doubled length)
+        // North wall (positive Y direction)
+        CreateWall(engine, glmvec3{0.0f, playFieldSize / 2, 0.0f}, glmvec3{playFieldSize, 5.0f, 5.0f});
         
-        // TODO: Create other three walls (south, east, west)
+        // South wall (negative Y direction)
+        CreateWall(engine, glmvec3{0.0f, -playFieldSize / 2, 0.0f}, glmvec3{playFieldSize, 5.0f, 5.0f});
+
+        // // East wall (positive X direction)
+        // CreateWall(engine, glmvec3{playFieldSize, 0.0f, 0.0f}, glmvec3{5.0f, playFieldSize * 4.0f, 5.0f});
+        
+        // // West wall (negative X direction)
+        // CreateWall(engine, glmvec3{-playFieldSize, 0.0f, 0.0f}, glmvec3{5.0f, playFieldSize * 4.0f, 5.0f});
     }
 
     /**
@@ -53,7 +61,7 @@ public:
             vve::Scale{vec3_t{scale.x, scale.y, scale.z}}
         );
 
-        // Create immovable physics body (infinite mass = static object)
+        // Create immovable physics body (very high mass = practically immovable)
         auto body = std::make_shared<vpe::VPEWorld::Body>(
             m_physics,
             "Wall_" + std::to_string(m_walls.size()),
@@ -64,9 +72,9 @@ public:
             glmquat{1.0f, 0.0f, 0.0f, 0.0f},  // No rotation
             vpe::toPhysics(glmvec3{0.0f, 0.0f, 0.0f}),  // Zero initial velocity
             vpe::toPhysics(glmvec3{0.0f, 0.0f, 0.0f}),  // Zero angular velocity
-            0.0_real,  // Zero mass = infinite mass = immovable static object
-            0.0_real,  // No restitution (no bounce)
-            1.0_real   // High friction
+            1.0_real / 1000000.0_real,  // Very high mass (1,000,000 kg) = practically immovable
+            0.2_real,  // Low restitution (less bouncy)
+            0.9_real   // High friction
         );
 
         // Set up physics callback (walls don't move, but we keep the structure)
@@ -90,6 +98,6 @@ public:
 private:
     vpe::VPEWorld* m_physics = nullptr;
     vecs::Registry* m_registry = nullptr;
-    float m_playFieldSize = 50.0f;
+    float m_playFieldSize = 200.0f;
     std::vector<std::shared_ptr<vpe::VPEWorld::Body>> m_walls;
 };
