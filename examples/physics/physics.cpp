@@ -70,7 +70,7 @@ class MyGame : public vve::System {
             // Set up isometric camera - looking down at 45° angle from above
             // Position camera high and back from the origin
             auto [pn, rn] = m_registry.template Get<vve::Position&, vve::Rotation&>(m_cameraNodeHandle);
-            pn() = vec3_t{0.0f, -60.0f, 120.0f};  // High above the play area
+            pn() = vec3_t{0.0f, -140.0f, 120.0f};  // High above the play area
             
             // Rotate camera to look down at 45° angle (isometric view)
             m_registry.Get<vve::Rotation&>(m_cameraHandle)() = mat3_t{ 
@@ -96,9 +96,9 @@ class MyGame : public vve::System {
             m_gameMap.Create(m_engine, &m_physics, &m_registry, 150.0f);
             std::cout << "Created north wall boundary" << std::endl;
 
-            // ----------------- Spawn 3 AI Rubber Ducks with Different Colors -----------------
+            // ----------------- Spawn 4 AI Rubber Ducks with Different Colors -----------------
             
-            m_rubberDucks.resize(3);
+            m_rubberDucks.resize(4);
             
             // Rubber Duck 1 - Red (top-right)
             m_rubberDucks[0].Create(m_engine, &m_physics, &m_registry,
@@ -117,6 +117,12 @@ class MyGame : public vve::System {
                                    glmvec3{-40.0f, 40.0f, 0.0f},
                                    vec3_t{1.0f, 1.0f, 0.2f});  // Yellow tint
             std::cout << "Spawned Rubber Duck 3 (Yellow) at (-40, 40, 0)" << std::endl;
+            
+            // Rubber Duck 4 - Cyan (bottom-right)
+            m_rubberDucks[3].Create(m_engine, &m_physics, &m_registry,
+                                   glmvec3{40.0f, -40.0f, 0.0f},
+                                   vec3_t{0.2f, 1.0f, 1.0f});  // Cyan tint
+            std::cout << "Spawned Rubber Duck 4 (Cyan) at (40, -40, 0)" << std::endl;
 
 			m_engine.SetVolume(m_volume);
             return false;
