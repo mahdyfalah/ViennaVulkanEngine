@@ -11,6 +11,7 @@
 #include "Car.hpp"
 #include "RubberDuck.hpp"
 #include "Bullet.hpp"
+#include "AmmoPack.hpp"
 #include "GameMap.hpp"
 
 
@@ -128,13 +129,38 @@ class MyGame : public vve::System {
             // Update player car with input
             m_playerCar.HandleInput((float)dt, m_keyW, m_keyS, m_keyA, m_keyD);
             
-            // Get player position for AI targeting
+            // Get player position for AI targeting and ammo collection
             glmvec3 playerPos = m_playerCar.GetPosition();
             
             // Update rubber ducks with player position as target
             for (auto& duck : m_rubberDucks) {
                 duck.SetAITarget(playerPos);
                 duck.UpdateAI((float)dt);
+            }
+            
+            // Update and spawn ammo packs (limit to 3 on map)
+            m_ammoSpawnTimer -= dt;
+            if (m_ammoSpawnTimer <= 0.0f && m_ammoPacks.size() < 3) {
+                SpawnAmmoPack();
+                m_ammoSpawnTimer = 3.0f;  // Spawn every 3 seconds
+            }
+            
+            // Update ammo packs (rotation) and check collection
+            for (auto it = m_ammoPacks.begin(); it != m_ammoPacks.end(); ) {
+                it->Update((float)dt);
+                
+                // Check if player collected the ammo
+                glmvec3 ammoPos = it->GetPosition();
+                float distance = glm::length(playerPos - ammoPos);
+                
+                if (distance < 6.0f) {  // Collection radius
+                    m_ammo++;
+                    it->Destroy();
+                    std::cout << "Ammo collected! Total ammo: " << m_ammo << std::endl;
+                    it = m_ammoPacks.erase(it);
+                } else {
+                    ++it;
+                }
             }
             
             // Update bullets and check for collisions
@@ -185,6 +211,12 @@ class MyGame : public vve::System {
 
             // Space bar for shooting
             if (key == SDL_SCANCODE_SPACE) {
+                // Check if player has ammo
+                if (m_ammo <= 0) {
+                    std::cout << "No ammo! Collect ammo packs first." << std::endl;
+                    return false;
+                }
+                
                 // Check cooldown
                 auto currentTime = std::chrono::steady_clock::now();
                 auto timeSinceLastShot = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -192,7 +224,9 @@ class MyGame : public vve::System {
                 
                 if (timeSinceLastShot >= m_shootCooldown) {
                     ShootBullet();
+                    m_ammo--;  // Consume ammo
                     m_lastShotTime = currentTime;
+                    std::cout << "Ammo remaining: " << m_ammo << std::endl;
                 }
             }
 
@@ -228,6 +262,8 @@ class MyGame : public vve::System {
             }
             ImGui::Text("Rubber Ducks Remaining: %d / %d", aliveDucks, (int)m_rubberDucks.size());
             ImGui::Text("Active Bullets: %d", (int)m_bullets.size());
+            ImGui::Text("Ammo: %d", m_ammo);
+            ImGui::Text("Active Ammo Packs: %d", (int)m_ammoPacks.size());
             
             ImGui::Separator();
             ImGui::Text("Controls:");
@@ -268,12 +304,40 @@ class MyGame : public vve::System {
                       << ", " << shootDirection.y << ")" << std::endl;
         }
 
+        void SpawnAmmoPack() {
+            // Get player position
+            glmvec3 carPos = m_playerCar.GetPosition();
+            
+            // Spawn ammo pack at random position near player (within 30-50 units)
+            float angle = (rand() % 360) * (M_PI / 180.0f);
+            float distance = 30.0f + (rand() % 20);  // 30-50 units away
+            
+            glmvec3 spawnPos{
+                carPos.x + glm::cos(angle) * distance,
+                carPos.y + glm::sin(angle) * distance,
+                0.0f
+            };
+            
+            // Clamp to playfield bounds
+            const float boundaryLimit = 65.0f;
+            spawnPos.x = glm::clamp(spawnPos.x, -boundaryLimit, boundaryLimit);
+            spawnPos.y = glm::clamp(spawnPos.y, -boundaryLimit, boundaryLimit);
+            
+            // Create ammo pack
+            AmmoPack newAmmo;
+            newAmmo.Create(m_engine, &m_physics, &m_registry, spawnPos);
+            m_ammoPacks.push_back(newAmmo);
+            
+            std::cout << "Ammo pack spawned at (" << spawnPos.x << ", " << spawnPos.y << ")" << std::endl;
+        }
+
     private:
     	vpe::VPEWorld m_physics;
         GameMap m_gameMap;
         Car m_playerCar;
         std::vector<RubberDuck> m_rubberDucks;
         std::vector<Bullet> m_bullets;
+        std::vector<AmmoPack> m_ammoPacks;
         
         // Input state
         bool m_keyW = false;
@@ -284,6 +348,10 @@ class MyGame : public vve::System {
         // Shooting cooldown
         std::chrono::steady_clock::time_point m_lastShotTime{};
         int m_shootCooldown = 300;  // milliseconds between shots
+        
+        // Ammo system
+        int m_ammo = 0;
+        float m_ammoSpawnTimer = 3.0f;  // Start spawning after 3 seconds
         
         vecs::Handle m_handlePlane{};
         vecs::Handle m_cameraHandle{};
