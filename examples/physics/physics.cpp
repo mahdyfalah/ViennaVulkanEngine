@@ -135,12 +135,47 @@ class MyGame : public vve::System {
             // Update player car with input
             m_playerCar.HandleInput((float)dt, m_keyW, m_keyS, m_keyA, m_keyD);
             
-            // Get player position for AI targeting and ammo collection
+            // Get player position for ammo collection
             glmvec3 playerPos = m_playerCar.GetPosition();
             
-            // Update rubber ducks with player position as target
+            // Find nearest ammo pack for each duck and determine behavior based on distance comparison
             for (auto& duck : m_rubberDucks) {
-                duck.SetAITarget(playerPos);
+                if (!duck.IsAlive()) continue;
+                
+                // Find nearest ammo pack
+                glmvec3 duckPos = duck.GetPosition();
+                glmvec3 nearestAmmo{0.0f};
+                float duckToAmmoDist = 1000.0f;
+                
+                for (const auto& ammo : m_ammoPacks) {
+                    glmvec3 ammoPos = ammo.GetPosition();
+                    float dist = glm::length(ammoPos - duckPos);
+                    if (dist < duckToAmmoDist) {
+                        duckToAmmoDist = dist;
+                        nearestAmmo = ammoPos;
+                    }
+                }
+                
+                // If ammo exists, compare distance to player vs duck
+                if (nearestAmmo != glmvec3{0.0f}) {
+                    float playerToAmmoDist = glm::length(nearestAmmo - playerPos);
+                    
+                    // If ammo is closer to duck than player, SEEK it
+                    // Otherwise, FLEE or WANDER
+                    if (duckToAmmoDist < playerToAmmoDist) {
+                        duck.SetBehavior(RubberDuck::AIBehavior::SEEK);
+                        duck.SetAITarget(nearestAmmo);
+                    } else {
+                        // Player is closer - flee from ammo or wander
+                        duck.SetBehavior(RubberDuck::AIBehavior::WANDER);
+                        duck.SetAITarget(glmvec3{0.0f});
+                    }
+                } else {
+                    // No ammo available - wander
+                    duck.SetBehavior(RubberDuck::AIBehavior::WANDER);
+                    duck.SetAITarget(glmvec3{0.0f});
+                }
+                
                 duck.UpdateAI((float)dt);
             }
             
@@ -151,18 +186,40 @@ class MyGame : public vve::System {
                 m_ammoSpawnTimer = 3.0f;  // Spawn every 3 seconds
             }
             
-            // Update ammo packs (rotation) and check collection
+            // Update ammo packs (rotation) and check collection by player AND ducks
             for (auto it = m_ammoPacks.begin(); it != m_ammoPacks.end(); ) {
                 it->Update((float)dt);
+                bool wasCollected = false;
+                glmvec3 ammoPos = it->GetPosition();
                 
                 // Check if player collected the ammo
-                glmvec3 ammoPos = it->GetPosition();
-                float distance = glm::length(playerPos - ammoPos);
-                
-                if (distance < 6.0f) {  // Collection radius
+                float playerDist = glm::length(playerPos - ammoPos);
+                if (playerDist < 6.0f) {  // Collection radius
                     m_ammo++;
                     it->Destroy();
-                    std::cout << "Ammo collected! Total ammo: " << m_ammo << std::endl;
+                    std::cout << "Ammo collected by Player! Total ammo: " << m_ammo << std::endl;
+                    wasCollected = true;
+                }
+                
+                // Check if any duck destroyed the ammo
+                if (!wasCollected) {
+                    for (auto& duck : m_rubberDucks) {
+                        if (!duck.IsAlive()) continue;
+                        
+                        glmvec3 duckPos = duck.GetPosition();
+                        float duckDist = glm::length(duckPos - ammoPos);
+                        
+                        if (duckDist < 6.0f) {  // Duck collection radius
+                            it->Destroy();
+                            std::cout << "Ammo destroyed by Duck! Duck position: (" 
+                                      << duckPos.x << ", " << duckPos.y << ")" << std::endl;
+                            wasCollected = true;
+                            break;
+                        }
+                    }
+                }
+                
+                if (wasCollected) {
                     it = m_ammoPacks.erase(it);
                 } else {
                     ++it;
@@ -188,6 +245,17 @@ class MyGame : public vve::System {
                                 it->Destroy();
                                 shouldRemove = true;
                                 std::cout << "Duck hit! Distance: " << distance << std::endl;
+                                
+                                // Check if all ducks are eliminated (win condition)
+                                int aliveDucks = 0;
+                                for (const auto& d : m_rubberDucks) {
+                                    if (d.IsAlive()) aliveDucks++;
+                                }
+                                if (aliveDucks == 0 && !m_gameWon) {
+                                    m_gameWon = true;
+                                    std::cout << "\n=== YOU WIN! All ducks eliminated! ===\n" << std::endl;
+                                }
+                                
                                 break;
                             }
                         }
@@ -255,6 +323,16 @@ class MyGame : public vve::System {
         bool OnRecordNextFrame(Message message) { 
 
             ImGui::Begin("Game State");
+            
+            // Display WIN message prominently if game is won
+            if (m_gameWon) {
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));  // Green color
+                ImGui::SetWindowFontScale(2.0f);  // Bigger text
+                ImGui::Text("*** YOU WIN! ***");
+                ImGui::SetWindowFontScale(1.0f);  // Reset size
+                ImGui::PopStyleColor();
+                ImGui::Separator();
+            }
             
             // Display player car info
             auto playerPos = m_playerCar.GetPosition();
@@ -358,6 +436,9 @@ class MyGame : public vve::System {
         // Ammo system
         int m_ammo = 0;
         float m_ammoSpawnTimer = 3.0f;  // Start spawning after 3 seconds
+        
+        // Game state
+        bool m_gameWon = false;
         
         vecs::Handle m_handlePlane{};
         vecs::Handle m_cameraHandle{};

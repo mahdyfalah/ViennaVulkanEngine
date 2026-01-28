@@ -87,7 +87,7 @@ public:
     }
 
     /**
-     * @brief Update AI behavior (seek, flee, wander)
+     * @brief Update AI behavior (seek ammo if closer, otherwise flee/wander)
      * @param dt Delta time
      */
     void UpdateAI(float dt) {
@@ -98,23 +98,8 @@ public:
         const float drag = 0.95f;
         const float turnSpeed = 2.0f;
 
-        // Update behavior timer
-        m_behaviorTimer -= dt;
-        if (m_behaviorTimer <= 0.0f) {
-            // Switch behavior randomly
-            int behavior = rand() % 3;
-            m_currentBehavior = static_cast<AIBehavior>(behavior);
-            m_behaviorTimer = 3.0f + (rand() % 3);  // 3-6 seconds
-
-            // Pick new wander target
-            if (m_currentBehavior == AIBehavior::WANDER) {
-                m_targetPosition = glmvec3{
-                    (rand() % 100 - 50) * 1.2f,
-                    (rand() % 100 - 50) * 1.2f,
-                    0.0f
-                };
-            }
-        }
+        // Behavior is now determined by distance comparison (set from physics.cpp)
+        // No random timer - behavior is purely distance-based
 
         glmvec3 currentPos = GetPosition();
         glmvec3 targetDir{0.0f};
@@ -122,30 +107,45 @@ public:
         // Determine target direction based on behavior
         switch (m_currentBehavior) {
             case AIBehavior::SEEK:
-                // Seek player
+                // Seek nearest ammo pack (ammo is closer to us than player)
                 if (m_targetPosition != glmvec3{0.0f}) {
                     targetDir = glm::normalize(m_targetPosition - currentPos);
+                } else {
+                    // No ammo available, wander instead
+                    targetDir = glm::normalize(glmvec3{
+                        (rand() % 100 - 50) * 1.2f,
+                        (rand() % 100 - 50) * 1.2f,
+                        0.0f
+                    } - currentPos);
                 }
                 break;
 
             case AIBehavior::FLEE:
-                // Flee from player
+                // Flee from ammo (player is closer, avoid competition)
                 if (m_targetPosition != glmvec3{0.0f}) {
                     targetDir = glm::normalize(currentPos - m_targetPosition);
+                } else {
+                    // No target, wander
+                    targetDir = glm::normalize(glmvec3{
+                        (rand() % 100 - 50) * 1.2f,
+                        (rand() % 100 - 50) * 1.2f,
+                        0.0f
+                    } - currentPos);
                 }
                 break;
 
             case AIBehavior::WANDER:
-                // Wander to random point
-                targetDir = glm::normalize(m_targetPosition - currentPos);
-                // Pick new target when close
-                if (glm::length(m_targetPosition - currentPos) < 10.0f) {
+                // Wander when no ammo available
+                m_wanderTimer -= dt;
+                if (m_wanderTimer <= 0.0f) {
                     m_targetPosition = glmvec3{
                         (rand() % 100 - 50) * 1.2f,
                         (rand() % 100 - 50) * 1.2f,
                         0.0f
                     };
+                    m_wanderTimer = 2.0f;
                 }
+                targetDir = glm::normalize(m_targetPosition - currentPos);
                 break;
         }
 
@@ -213,6 +213,13 @@ public:
      */
     void SetAITarget(glmvec3 target) {
         m_targetPosition = target;
+    }
+
+    /**
+     * @brief Set AI behavior directly (used for distance-based logic)
+     */
+    void SetBehavior(AIBehavior behavior) {
+        m_currentBehavior = behavior;
     }
 
     /**
