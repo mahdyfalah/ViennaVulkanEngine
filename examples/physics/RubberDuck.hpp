@@ -240,7 +240,8 @@ public:
         m_isAlive = false;
         m_physics->eraseBody(m_body);
         
-        // TODO: Remove visual representation from scene
+        // Hide visual representation by scaling to 0
+        m_registry->Put(m_sceneHandle, vve::Scale{vec3_t{0.0f, 0.0f, 0.0f}});
     }
 
     /**

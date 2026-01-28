@@ -3,12 +3,14 @@
 #include <iostream>
 #include <utility>
 #include <format>
+#include <chrono>
 #include "VHInclude.h"
 #include "VEInclude.h"
 
 #include "VPE.hpp"
 #include "Car.hpp"
 #include "RubberDuck.hpp"
+#include "Bullet.hpp"
 #include "GameMap.hpp"
 
 
@@ -135,6 +137,38 @@ class MyGame : public vve::System {
                 duck.UpdateAI((float)dt);
             }
             
+            // Update bullets and check for collisions
+            for (auto it = m_bullets.begin(); it != m_bullets.end(); ) {
+                bool shouldRemove = it->Update((float)dt);
+                
+                if (!shouldRemove) {
+                    // Check collision with rubber ducks
+                    glmvec3 bulletPos = it->GetPosition();
+                    
+                    for (auto& duck : m_rubberDucks) {
+                        if (duck.IsAlive()) {
+                            glmvec3 duckPos = duck.GetPosition();
+                            float distance = glm::length(bulletPos - duckPos);
+                            
+                            // Hit detection (within 5 units)
+                            if (distance < 5.0f) {
+                                duck.Destroy();
+                                it->Destroy();
+                                shouldRemove = true;
+                                std::cout << "Duck hit! Distance: " << distance << std::endl;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (shouldRemove) {
+                    it = m_bullets.erase(it);
+                } else {
+                    ++it;
+                }
+            }
+            
             m_physics.tick(dt);
             return false;
         }
@@ -149,7 +183,18 @@ class MyGame : public vve::System {
             if (key == SDL_SCANCODE_S) m_keyS = true;
             if (key == SDL_SCANCODE_D) m_keyD = true;
 
-            // TODO: Space bar for shooting
+            // Space bar for shooting
+            if (key == SDL_SCANCODE_SPACE) {
+                // Check cooldown
+                auto currentTime = std::chrono::steady_clock::now();
+                auto timeSinceLastShot = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    currentTime - m_lastShotTime).count();
+                
+                if (timeSinceLastShot >= m_shootCooldown) {
+                    ShootBullet();
+                    m_lastShotTime = currentTime;
+                }
+            }
 
 		    return false;
         }
@@ -182,11 +227,12 @@ class MyGame : public vve::System {
                 if (duck.IsAlive()) aliveDucks++;
             }
             ImGui::Text("Rubber Ducks Remaining: %d / %d", aliveDucks, (int)m_rubberDucks.size());
+            ImGui::Text("Active Bullets: %d", (int)m_bullets.size());
             
             ImGui::Separator();
             ImGui::Text("Controls:");
             ImGui::Text("  WASD - Drive");
-            ImGui::Text("  Space - Shoot (TODO)");
+            ImGui::Text("  Space - Shoot");
             
             ImGui::Separator();
         	if (ImGui::SliderFloat("Sound Volume", &m_volume, 0, MIX_MAX_VOLUME)) {
@@ -196,17 +242,48 @@ class MyGame : public vve::System {
             return false;
         }
 
+        void ShootBullet() {
+            // Get player position and rotation
+            glmvec3 carPos = m_playerCar.GetPosition();
+            float carRotation = m_playerCar.GetRotation();
+            
+            // Calculate shooting direction based on car rotation
+            glmvec3 shootDirection{
+                glm::cos(carRotation),
+                glm::sin(carRotation),
+                0.0f
+            };
+            
+            // Spawn bullet slightly in front of car
+            glmvec3 bulletStartPos = carPos + shootDirection * 5.0f;
+            
+            // Create bullet
+            Bullet newBullet;
+            newBullet.Create(m_engine, &m_physics, &m_registry, 
+                            bulletStartPos, shootDirection, 120.0f);
+            m_bullets.push_back(newBullet);
+            
+            std::cout << "Bullet fired! Position: (" << bulletStartPos.x << ", " 
+                      << bulletStartPos.y << "), Direction: (" << shootDirection.x 
+                      << ", " << shootDirection.y << ")" << std::endl;
+        }
+
     private:
     	vpe::VPEWorld m_physics;
         GameMap m_gameMap;
         Car m_playerCar;
         std::vector<RubberDuck> m_rubberDucks;
+        std::vector<Bullet> m_bullets;
         
         // Input state
         bool m_keyW = false;
         bool m_keyA = false;
         bool m_keyS = false;
         bool m_keyD = false;
+        
+        // Shooting cooldown
+        std::chrono::steady_clock::time_point m_lastShotTime{};
+        int m_shootCooldown = 300;  // milliseconds between shots
         
         vecs::Handle m_handlePlane{};
         vecs::Handle m_cameraHandle{};
