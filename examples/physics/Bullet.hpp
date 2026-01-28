@@ -39,7 +39,7 @@ public:
             vve::Name{},
             vve::ParentHandle{},
             vve::Filename{"assets/test/crate0/cube.obj"},
-            aiProcess_FlipUVs,
+            static_cast<aiPostProcessSteps>(aiProcess_FlipUVs | aiProcess_FlipWindingOrder),
             vve::Position{vec3_t{position.x, position.y, position.z}},
             vve::Rotation{},
             vve::Scale{vec3_t{1.5f, 1.5f, 1.5f}}  // Small bullet

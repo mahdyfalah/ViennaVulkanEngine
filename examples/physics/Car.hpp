@@ -35,8 +35,8 @@ public:
             vve::ParentHandle{},
             vve::Filename{"assets/standard/Ultracompact_Car.obj"},
             aiProcess_FlipUVs,  // Adjusted to fix polygon visibility
-            vve::Position{vec3_t{position.x, position.y, position.z}},  // Raised position to prevent clipping
-            vve::Rotation{mat3_t{glm::rotate(mat4_t{1.0f}, glm::radians(180.0f), vec3_t{0.0f, 1.0f, 0.0f})}}  // Rotate 180° to fix forward/backward direction
+            vve::Position{vec3_t{position.x, position.y, position.z}},
+            vve::Rotation{mat3_t{glm::rotate(mat4_t{1.0f}, glm::radians(0.0f), vec3_t{0.0f, 1.0f, 0.0f})}}  // No rotation on Y axis
         );
 
         // Create physics body
@@ -62,10 +62,15 @@ public:
             auto orient = body->m_orientationLW;
             body->stepPosition(dt, pos, orient, false);
             
+            // Apply 180-degree rotation around Z-axis to fix car model orientation
+            glmmat3 physicsRotation = vpe::fromPhysics(toMat3(orient));
+            glmmat4 rotationOffset = glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glmvec3{0.0f, 0.0f, 1.0f});
+            glmmat3 finalRotation = glmmat3(rotationOffset) * physicsRotation;
+            
             vecs::Handle node = vecs::Handle(reinterpret_cast<size_t>(body->m_owner));
             registry->Put(node, 
                          vve::Position(vpe::fromPhysics(pos)), 
-                         vve::Rotation(vpe::fromPhysics(toMat3(orient))));
+                         vve::Rotation(finalRotation));
         };
 
         // Initial sync
@@ -98,10 +103,10 @@ public:
 
         // Acceleration/Braking - swapped W and S controls
         if (forward) {
-            m_speed -= acceleration * dt;  // W now brakes/decelerates
+            m_speed += acceleration * dt;  // W now accelerates
         }
         if (backward) {
-            m_speed += acceleration * dt;  // S now accelerates
+            m_speed -= acceleration * dt;  // S now decelerates
         }
 
         // Clamp speed

@@ -70,10 +70,15 @@ public:
             auto orient = body->m_orientationLW;
             body->stepPosition(dt, pos, orient, false);
             
+            // Apply 180-degree rotation around Z-axis to fix duck model orientation
+            glmmat3 physicsRotation = vpe::fromPhysics(toMat3(orient));
+            glmmat4 rotationOffset = glm::rotate(glm::mat4(1.0f), glm::radians(180.0f), glmvec3{0.0f, 0.0f, 1.0f});
+            glmmat3 finalRotation = glmmat3(rotationOffset) * physicsRotation;
+            
             vecs::Handle node = vecs::Handle(reinterpret_cast<size_t>(body->m_owner));
             registry->Put(node, 
                          vve::Position(vpe::fromPhysics(pos)), 
-                         vve::Rotation(vpe::fromPhysics(toMat3(orient))));
+                         vve::Rotation(finalRotation));
         };
 
         // Initial sync
