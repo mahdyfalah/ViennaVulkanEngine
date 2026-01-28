@@ -82,47 +82,35 @@ class MyGame : public vve::System {
             m_playerCar.Create(m_engine, &m_physics, &m_registry, 
                               glmvec3{0.0f, 0.0f, 0.0f});  // Center of play area
 
-            // Debug: Print positions
-            std::cout << "\n=== SPAWN DEBUG ==="<< std::endl;
-            std::cout << "Camera Node Position: (" << pn().x << ", " << pn().y << ", " << pn().z << ")" << std::endl;
-            std::cout << "Car Spawn Request: (0, 0, 0)" << std::endl;
             auto carPos = m_playerCar.GetPosition();
-            std::cout << "Car Actual Position: (" << carPos.x << ", " << carPos.y << ", " << carPos.z << ")" << std::endl;
-            std::cout << "Distance from camera: " << glm::length(vec3_t{pn().x - carPos.x, pn().y - carPos.y, pn().z - carPos.z}) << std::endl;
-            std::cout << "==================\n" << std::endl;
 
             // ----------------- Create Game Map with Walls -----------------
             
             m_gameMap.Create(m_engine, &m_physics, &m_registry, 150.0f);
-            std::cout << "Created north wall boundary" << std::endl;
 
-            // ----------------- Spawn 4 AI Rubber Ducks with Different Colors -----------------
+            // ----------------- Spawn 4 AI Rubber Ducks -----------------
             
             m_rubberDucks.resize(4);
             
-            // Rubber Duck 1 - Red (top-right)
+            // Rubber Duck 1 - (top-right)
             m_rubberDucks[0].Create(m_engine, &m_physics, &m_registry,
                                    glmvec3{40.0f, 40.0f, 0.0f},
-                                   vec3_t{1.0f, 0.2f, 0.2f});  // Red tint
-            std::cout << "Spawned Rubber Duck 1 (Red) at (40, 40, 0)" << std::endl;
+                                   vec3_t{1.0f, 0.2f, 0.2f});
             
-            // Rubber Duck 2 - Blue (bottom-left)
+            // Rubber Duck 2 - (bottom-left)
             m_rubberDucks[1].Create(m_engine, &m_physics, &m_registry,
                                    glmvec3{-40.0f, -40.0f, 0.0f},
-                                   vec3_t{0.2f, 0.4f, 1.0f});  // Blue tint
-            std::cout << "Spawned Rubber Duck 2 (Blue) at (-40, -40, 0)" << std::endl;
-            
-            // Rubber Duck 3 - Yellow (top-left)
+                                   vec3_t{0.2f, 0.4f, 1.0f});
+             
+            // Rubber Duck 3 - (top-left)
             m_rubberDucks[2].Create(m_engine, &m_physics, &m_registry,
                                    glmvec3{-40.0f, 40.0f, 0.0f},
-                                   vec3_t{1.0f, 1.0f, 0.2f});  // Yellow tint
-            std::cout << "Spawned Rubber Duck 3 (Yellow) at (-40, 40, 0)" << std::endl;
+                                   vec3_t{1.0f, 1.0f, 0.2f}); 
             
-            // Rubber Duck 4 - Cyan (bottom-right)
+            // Rubber Duck 4 - (bottom-right)
             m_rubberDucks[3].Create(m_engine, &m_physics, &m_registry,
                                    glmvec3{40.0f, -40.0f, 0.0f},
-                                   vec3_t{0.2f, 1.0f, 1.0f});  // Cyan tint
-            std::cout << "Spawned Rubber Duck 4 (Cyan) at (40, -40, 0)" << std::endl;
+                                   vec3_t{0.2f, 1.0f, 1.0f}); 
 
 			m_engine.SetVolume(m_volume);
             return false;
@@ -167,7 +155,7 @@ class MyGame : public vve::System {
                         duck.SetAITarget(nearestAmmo);
                     } else {
                         // Player is closer - flee from ammo or wander
-                        duck.SetBehavior(RubberDuck::AIBehavior::WANDER);
+                        duck.SetBehavior(RubberDuck::AIBehavior::FLEE);
                         duck.SetAITarget(glmvec3{0.0f});
                     }
                 } else {
@@ -197,7 +185,6 @@ class MyGame : public vve::System {
                 if (playerDist < 6.0f) {  // Collection radius
                     m_ammo++;
                     it->Destroy();
-                    std::cout << "Ammo collected by Player! Total ammo: " << m_ammo << std::endl;
                     wasCollected = true;
                 }
                 
@@ -211,8 +198,6 @@ class MyGame : public vve::System {
                         
                         if (duckDist < 6.0f) {  // Duck collection radius
                             it->Destroy();
-                            std::cout << "Ammo destroyed by Duck! Duck position: (" 
-                                      << duckPos.x << ", " << duckPos.y << ")" << std::endl;
                             wasCollected = true;
                             break;
                         }
@@ -244,7 +229,6 @@ class MyGame : public vve::System {
                                 duck.Destroy();
                                 it->Destroy();
                                 shouldRemove = true;
-                                std::cout << "Duck hit! Distance: " << distance << std::endl;
                                 
                                 // Check if all ducks are eliminated (win condition)
                                 int aliveDucks = 0;
@@ -253,7 +237,6 @@ class MyGame : public vve::System {
                                 }
                                 if (aliveDucks == 0 && !m_gameWon) {
                                     m_gameWon = true;
-                                    std::cout << "\n=== YOU WIN! All ducks eliminated! ===\n" << std::endl;
                                 }
                                 
                                 break;
@@ -287,7 +270,6 @@ class MyGame : public vve::System {
             if (key == SDL_SCANCODE_SPACE) {
                 // Check if player has ammo
                 if (m_ammo <= 0) {
-                    std::cout << "No ammo! Collect ammo packs first." << std::endl;
                     return false;
                 }
                 
@@ -300,7 +282,6 @@ class MyGame : public vve::System {
                     ShootBullet();
                     m_ammo--;  // Consume ammo
                     m_lastShotTime = currentTime;
-                    std::cout << "Ammo remaining: " << m_ammo << std::endl;
                 }
             }
 
@@ -324,7 +305,7 @@ class MyGame : public vve::System {
 
             ImGui::Begin("Game State");
             
-            // Display WIN message prominently if game is won
+            // Display WIN message
             if (m_gameWon) {
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 1.0f, 0.0f, 1.0f));  // Green color
                 ImGui::SetWindowFontScale(2.0f);  // Bigger text
@@ -382,10 +363,6 @@ class MyGame : public vve::System {
             newBullet.Create(m_engine, &m_physics, &m_registry, 
                             bulletStartPos, shootDirection, 120.0f);
             m_bullets.push_back(newBullet);
-            
-            std::cout << "Bullet fired! Position: (" << bulletStartPos.x << ", " 
-                      << bulletStartPos.y << "), Direction: (" << shootDirection.x 
-                      << ", " << shootDirection.y << ")" << std::endl;
         }
 
         void SpawnAmmoPack() {
@@ -402,9 +379,7 @@ class MyGame : public vve::System {
             AmmoPack newAmmo;
             newAmmo.Create(m_engine, &m_physics, &m_registry, spawnPos);
             m_ammoPacks.push_back(newAmmo);
-            
-            std::cout << "Ammo pack spawned at (" << spawnPos.x << ", " << spawnPos.y << ")" << std::endl;
-        }
+            }
 
     private:
     	vpe::VPEWorld m_physics;

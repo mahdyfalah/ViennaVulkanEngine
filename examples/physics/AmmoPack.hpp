@@ -30,12 +30,11 @@ public:
         m_isActive = true;
         m_rotation = 0.0f;
 
-        // Create visual representation using cube (medium size, visible)
         m_sceneHandle = engine.CreateScene(
             vve::Name{},
             vve::ParentHandle{},
             vve::Filename{"assets/test/crate0/cube.obj"},
-            static_cast<aiPostProcessSteps>(aiProcess_FlipUVs | aiProcess_FlipWindingOrder),
+            aiProcess_FlipWindingOrder,
             vve::Position{vec3_t{position.x, position.y, position.z}},
             vve::Rotation{},
             vve::Scale{vec3_t{3.0f, 3.0f, 3.0f}}  // Medium size for visibility
@@ -50,9 +49,9 @@ public:
             glmvec3{3.0f, 3.0f, 3.0f},
             vpe::toPhysics(position),
             glmquat{1.0f, 0.0f, 0.0f, 0.0f},
-            vpe::toPhysics(glmvec3{0.0f, 0.0f, 0.0f}),  // No velocity (stationary)
+            vpe::toPhysics(glmvec3{0.0f, 0.0f, 0.0f}),  // No velocity
             vpe::toPhysics(glmvec3{0.0f, 0.0f, 0.0f}),  // No angular velocity
-            1.0_real / 1000000.0_real,  // Very high mass (immovable like walls)
+            1.0_real / 1000000.0_real,  // Very high mass
             0.0_real,
             0.0_real
         );

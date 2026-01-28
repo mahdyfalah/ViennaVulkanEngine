@@ -81,7 +81,6 @@ public:
                          vve::Rotation(finalRotation));
         };
 
-        // Initial sync
         m_body->m_on_move(0.0, m_body);
         m_physics->addBody(m_body);
     }
@@ -98,44 +97,19 @@ public:
         const float drag = 0.95f;
         const float turnSpeed = 2.0f;
 
-        // Behavior is now determined by distance comparison (set from physics.cpp)
-        // No random timer - behavior is purely distance-based
-
         glmvec3 currentPos = GetPosition();
         glmvec3 targetDir{0.0f};
 
-        // Determine target direction based on behavior
         switch (m_currentBehavior) {
             case AIBehavior::SEEK:
-                // Seek nearest ammo pack (ammo is closer to us than player)
-                if (m_targetPosition != glmvec3{0.0f}) {
-                    targetDir = glm::normalize(m_targetPosition - currentPos);
-                } else {
-                    // No ammo available, wander instead
-                    targetDir = glm::normalize(glmvec3{
-                        (rand() % 100 - 50) * 1.2f,
-                        (rand() % 100 - 50) * 1.2f,
-                        0.0f
-                    } - currentPos);
-                }
+                targetDir = glm::normalize(m_targetPosition - currentPos);
                 break;
 
             case AIBehavior::FLEE:
-                // Flee from ammo (player is closer, avoid competition)
-                if (m_targetPosition != glmvec3{0.0f}) {
-                    targetDir = glm::normalize(currentPos - m_targetPosition);
-                } else {
-                    // No target, wander
-                    targetDir = glm::normalize(glmvec3{
-                        (rand() % 100 - 50) * 1.2f,
-                        (rand() % 100 - 50) * 1.2f,
-                        0.0f
-                    } - currentPos);
-                }
+                targetDir = glm::normalize(currentPos - m_targetPosition);
                 break;
 
             case AIBehavior::WANDER:
-                // Wander when no ammo available
                 m_wanderTimer -= dt;
                 if (m_wanderTimer <= 0.0f) {
                     m_targetPosition = glmvec3{
@@ -149,59 +123,32 @@ public:
                 break;
         }
 
-        // Boundary avoidance (high priority)
-        const float boundaryLimit = 65.0f;
-        const float boundaryBuffer = 15.0f;
+        // Boundary avoidance
+        const float boundaryLimit = 70.0f;
+        const float edgeZone = boundaryLimit - 15.0f;
         glmvec3 boundaryForce{0.0f};
 
-        if (currentPos.x > boundaryLimit - boundaryBuffer) {
-            boundaryForce.x = -1.0f;
-        } else if (currentPos.x < -(boundaryLimit - boundaryBuffer)) {
-            boundaryForce.x = 1.0f;
-        }
+        if (std::abs(currentPos.x) > edgeZone) boundaryForce.x = -glm::sign(currentPos.x);
+        if (std::abs(currentPos.y) > edgeZone) boundaryForce.y = -glm::sign(currentPos.y);
 
-        if (currentPos.y > boundaryLimit - boundaryBuffer) {
-            boundaryForce.y = -1.0f;
-        } else if (currentPos.y < -(boundaryLimit - boundaryBuffer)) {
-            boundaryForce.y = 1.0f;
-        }
-
-        // Blend boundary avoidance with target direction
         if (glm::length(boundaryForce) > 0.01f) {
             targetDir = glm::normalize(boundaryForce * 2.0f + targetDir);
         }
 
-        // Calculate desired rotation
+        // Calculate and apply rotation
         float targetRotation = std::atan2(targetDir.y, targetDir.x);
-
-        // Smoothly turn towards target
         float rotationDiff = targetRotation - m_rotation;
-        // Normalize angle difference to [-PI, PI]
-        while (rotationDiff > M_PI) rotationDiff -= 2.0f * static_cast<float>(M_PI);
-        while (rotationDiff < -M_PI) rotationDiff += 2.0f * static_cast<float>(M_PI);
-
+        rotationDiff = std::fmod(rotationDiff + static_cast<float>(M_PI), 2.0f * static_cast<float>(M_PI)) - static_cast<float>(M_PI);
         m_rotation += glm::clamp(rotationDiff, -turnSpeed * dt, turnSpeed * dt);
 
-        // Apply acceleration in forward direction
-        m_speed += acceleration * dt;
-        m_speed = glm::clamp(m_speed, 0.0f, maxSpeed);
-        m_speed *= drag;
+        // Update speed and velocity
+        m_speed = glm::clamp((m_speed + acceleration * dt) * drag, 0.0f, maxSpeed);
 
-        // Calculate forward direction and apply velocity
-        glmvec3 forward_dir{
-            glm::cos(m_rotation),
-            glm::sin(m_rotation),
-            0.0f
-        };
+        glmvec3 forward_dir{glm::cos(m_rotation), glm::sin(m_rotation), 0.0f};
+        m_body->m_linear_velocityW = vpe::toPhysics(forward_dir * m_speed);
+        m_body->m_orientationLW = vpe::toPhysics(glm::rotate(glm::mat4{1.0f}, m_rotation, glmvec3{0.0f, 0.0f, 1.0f}));
 
-        glmvec3 newVelocity = forward_dir * m_speed;
-        m_body->m_linear_velocityW = vpe::toPhysics(newVelocity);
-
-        // Update rotation
-        glmmat4 rotMat = glm::rotate(glm::mat4{1.0f}, m_rotation, glmvec3{0.0f, 0.0f, 1.0f});
-        m_body->m_orientationLW = vpe::toPhysics(rotMat);
-
-        // Hard clamp position (safety net)
+        // Clamp position
         glmvec3 pos = m_body->m_positionW;
         pos.x = glm::clamp(pos.x, -boundaryLimit, boundaryLimit);
         pos.y = glm::clamp(pos.y, -boundaryLimit, boundaryLimit);

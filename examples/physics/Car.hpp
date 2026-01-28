@@ -27,31 +27,28 @@ public:
         
         m_physics = physics;
         m_registry = registry;
-        m_isAlive = true;
 
-// Create visual representation using Ultracompact_Car.obj
         m_sceneHandle = engine.CreateScene(
             vve::Name{},
             vve::ParentHandle{},
             vve::Filename{"assets/standard/Ultracompact_Car.obj"},
-            aiProcess_FlipUVs,  // Adjusted to fix polygon visibility
+            aiProcess_FlipUVs,
             vve::Position{vec3_t{position.x, position.y, position.z}},
-            vve::Rotation{mat3_t{glm::rotate(mat4_t{1.0f}, glm::radians(0.0f), vec3_t{0.0f, 1.0f, 0.0f})}}  // No rotation on Y axis
+            vve::Rotation{}
         );
 
         // Create physics body
-        // Note: Body constructor expects glmquat for orientation, not mat4
         m_body = std::make_shared<vpe::VPEWorld::Body>(
             m_physics,
             "PlayerCar",
             reinterpret_cast<void*>(m_sceneHandle.GetValue()),
             &m_physics->g_cube,
-            glmvec3{3.5f, 2.0f, 2.0f},  // Physics box roughly matching sports car dimensions
+            glmvec3{3.5f, 2.0f, 2.0f},  // Physics box roughly matching car dimensions
             vpe::toPhysics(position),
-            glmquat{glm::rotate(glm::quat(1.0f, 0.0f, 0.0f, 0.0f), glm::radians(-90.0f), glmvec3{1.0f, 0.0f, 0.0f})},  // Rotate physics body -90° around X-axis
+            glmquat{},  // Rotate physics body -90° around X-axis
             vpe::toPhysics(glmvec3{0.0f, 0.0f, 0.0f}),  // Initial velocity
             vpe::toPhysics(glmvec3{0.0f, 0.0f, 0.0f}),  // Initial angular velocity
-            1.0_real / 10.0_real,  // Mass (10kg car)
+            1.0_real / 10.0_real,  // Mass = 10 kg
             0.1_real,  // Low restitution (less bouncy)
             0.8_real   // High friction
         );
@@ -87,8 +84,6 @@ public:
      * @param right D key pressed
      */
     void HandleInput(float dt, bool forward, bool backward, bool left, bool right) {
-        if (!m_isAlive) return;
-
         const float acceleration = 150.0f;   // Forward/backward acceleration
         const float turnSpeed = 2.5f;       // Rotation speed (radians/sec)
         const float maxSpeed = 2000.0f;       // Maximum speed
@@ -101,7 +96,7 @@ public:
         // Apply drag (friction)
         m_speed *= drag;
 
-        // Acceleration/Braking - swapped W and S controls
+        // Acceleration/Braking
         if (forward) {
             m_speed += acceleration * dt;  // W now accelerates
         }
@@ -137,7 +132,7 @@ public:
         glmmat4 rotMat = glm::rotate(glm::mat4{1.0f}, m_rotation, glmvec3{0.0f, 0.0f, 1.0f});
         m_body->m_orientationLW = vpe::toPhysics(rotMat);
         
-        // Clamp position to stay within bounds (safety net to prevent escaping)
+        // Clamp position to stay within bounds
         glmvec3 currentPos = m_body->m_positionW;
         const float boundaryLimit = 67.0f;
         currentPos.x = glm::clamp(currentPos.x, -boundaryLimit, boundaryLimit);
@@ -161,26 +156,6 @@ public:
     }
 
     /**
-     * @brief Check if car is still alive
-     */
-    bool IsAlive() const {
-        return m_isAlive;
-    }
-
-    /**
-     * @brief Destroy/eliminate the car
-     */
-    void Destroy() {
-        if (!m_isAlive) return;
-        
-        m_isAlive = false;
-        m_physics->eraseBody(m_body);  // Pass the shared_ptr directly, not the owner
-        
-        // TODO: Remove visual representation from scene
-        // This will be handled when we implement proper entity removal
-    }
-
-    /**
      * @brief Get the physics body (for collision detection)
      */
     std::shared_ptr<vpe::VPEWorld::Body> GetBody() const {
@@ -194,7 +169,6 @@ private:
     std::shared_ptr<vpe::VPEWorld::Body> m_body;
 
     // Car state
-    bool m_isAlive = false;
     float m_speed = 0.0f;          // Current speed (forward/backward)
     float m_rotation = 0.0f;        // Current rotation angle (radians)
 }; 

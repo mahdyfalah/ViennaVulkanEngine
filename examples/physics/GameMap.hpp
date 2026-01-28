@@ -30,16 +30,16 @@ public:
         m_playFieldSize = playFieldSize;
 
         // Create all four walls to enclose the playing field
-        // North wall (positive Y direction) - horizontal
+        // North wall 
         CreateWall(engine, glmvec3{0.0f, playFieldSize / 2, 0.0f}, glmvec3{playFieldSize, 5.0f, 5.0f});
         
-        // South wall (negative Y direction) - horizontal
+        // South wall
         CreateWall(engine, glmvec3{0.0f, -playFieldSize / 2, 0.0f}, glmvec3{playFieldSize, 5.0f, 5.0f});
 
-        // East wall (positive X direction) - vertical (Y and X swapped for length along Y axis)
+        // East wall
         CreateWall(engine, glmvec3{playFieldSize / 2, 0.0f, 0.0f}, glmvec3{5.0f, playFieldSize, 5.0f});
         
-        // West wall (negative X direction) - vertical (Y and X swapped for length along Y axis)
+        // West wall
         CreateWall(engine, glmvec3{-playFieldSize / 2, 0.0f, 0.0f}, glmvec3{5.0f, playFieldSize, 5.0f});
     }
 
@@ -55,7 +55,7 @@ public:
             vve::Name{},
             vve::ParentHandle{},
             vve::Filename{"assets/test/crate0/cube.obj"},
-            static_cast<aiPostProcessSteps>(aiProcess_FlipUVs | aiProcess_FlipWindingOrder),
+            aiProcess_FlipWindingOrder,
             vve::Position{vec3_t{position.x, position.y, position.z}},
             vve::Rotation{},
             vve::Scale{vec3_t{scale.x, scale.y, scale.z}}

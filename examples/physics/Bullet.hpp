@@ -39,7 +39,7 @@ public:
             vve::Name{},
             vve::ParentHandle{},
             vve::Filename{"assets/test/crate0/cube.obj"},
-            static_cast<aiPostProcessSteps>(aiProcess_FlipUVs | aiProcess_FlipWindingOrder),
+            aiProcess_FlipWindingOrder,
             vve::Position{vec3_t{position.x, position.y, position.z}},
             vve::Rotation{},
             vve::Scale{vec3_t{1.5f, 1.5f, 1.5f}}  // Small bullet
@@ -91,7 +91,7 @@ public:
         
         // Remove if lifetime expired or out of bounds
         glmvec3 pos = GetPosition();
-        const float boundaryLimit = 80.0f;
+        const float boundaryLimit = 75.0f;
         
         if (m_lifetime <= 0.0f || 
             glm::abs(pos.x) > boundaryLimit || 
