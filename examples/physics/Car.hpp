@@ -197,4 +197,4 @@ private:
     bool m_isAlive = false;
     float m_speed = 0.0f;          // Current speed (forward/backward)
     float m_rotation = 0.0f;        // Current rotation angle (radians)
-};
+}; 

@@ -29,18 +29,18 @@ public:
         m_registry = registry;
         m_playFieldSize = playFieldSize;
 
-        // Create all four walls to enclose the playing field (doubled length)
-        // North wall (positive Y direction)
+        // Create all four walls to enclose the playing field
+        // North wall (positive Y direction) - horizontal
         CreateWall(engine, glmvec3{0.0f, playFieldSize / 2, 0.0f}, glmvec3{playFieldSize, 5.0f, 5.0f});
         
-        // South wall (negative Y direction)
+        // South wall (negative Y direction) - horizontal
         CreateWall(engine, glmvec3{0.0f, -playFieldSize / 2, 0.0f}, glmvec3{playFieldSize, 5.0f, 5.0f});
 
-        // // East wall (positive X direction)
-        // CreateWall(engine, glmvec3{playFieldSize, 0.0f, 0.0f}, glmvec3{5.0f, playFieldSize * 4.0f, 5.0f});
+        // East wall (positive X direction) - vertical (Y and X swapped for length along Y axis)
+        CreateWall(engine, glmvec3{playFieldSize / 2, 0.0f, 0.0f}, glmvec3{5.0f, playFieldSize, 5.0f});
         
-        // // West wall (negative X direction)
-        // CreateWall(engine, glmvec3{-playFieldSize, 0.0f, 0.0f}, glmvec3{5.0f, playFieldSize * 4.0f, 5.0f});
+        // West wall (negative X direction) - vertical (Y and X swapped for length along Y axis)
+        CreateWall(engine, glmvec3{-playFieldSize / 2, 0.0f, 0.0f}, glmvec3{5.0f, playFieldSize, 5.0f});
     }
 
     /**
@@ -78,8 +78,10 @@ public:
         );
 
         // Set up physics callback (walls don't move, but we keep the structure)
-        body->m_on_move = [this](double dt, std::shared_ptr<vpe::VPEWorld::Body> body) {
-            // Static walls don't move, but we keep the callback for consistency
+        body->m_on_move = [this, position](double dt, std::shared_ptr<vpe::VPEWorld::Body> body) {
+            // Force position to stay at creation position (walls are immovable)
+            body->m_positionW = vpe::toPhysics(position);
+            
             auto pos = body->m_positionW;
             auto orient = body->m_orientationLW;
             
