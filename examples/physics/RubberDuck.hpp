@@ -177,8 +177,8 @@ public:
         // Smoothly turn towards target
         float rotationDiff = targetRotation - m_rotation;
         // Normalize angle difference to [-PI, PI]
-        while (rotationDiff > M_PI) rotationDiff -= 2.0f * M_PI;
-        while (rotationDiff < -M_PI) rotationDiff += 2.0f * M_PI;
+        while (rotationDiff > M_PI) rotationDiff -= 2.0f * static_cast<float>(M_PI);
+        while (rotationDiff < -M_PI) rotationDiff += 2.0f * static_cast<float>(M_PI);
 
         m_rotation += glm::clamp(rotationDiff, -turnSpeed * dt, turnSpeed * dt);
 

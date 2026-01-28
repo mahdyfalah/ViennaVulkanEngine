@@ -139,7 +139,7 @@ public:
         
         // Clamp position to stay within bounds (safety net to prevent escaping)
         glmvec3 currentPos = m_body->m_positionW;
-        const float boundaryLimit = 73.0f;
+        const float boundaryLimit = 67.0f;
         currentPos.x = glm::clamp(currentPos.x, -boundaryLimit, boundaryLimit);
         currentPos.y = glm::clamp(currentPos.y, -boundaryLimit, boundaryLimit);
         currentPos.z = glm::clamp(currentPos.z, -boundaryLimit, boundaryLimit);

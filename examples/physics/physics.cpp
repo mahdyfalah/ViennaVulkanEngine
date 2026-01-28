@@ -180,7 +180,7 @@ class MyGame : public vve::System {
             }
             
             // Update and spawn ammo packs (limit to 3 on map)
-            m_ammoSpawnTimer -= dt;
+            m_ammoSpawnTimer -= static_cast<float>(dt);
             if (m_ammoSpawnTimer <= 0.0f && m_ammoPacks.size() < 3) {
                 SpawnAmmoPack();
                 m_ammoSpawnTimer = 3.0f;  // Spawn every 3 seconds
@@ -389,23 +389,14 @@ class MyGame : public vve::System {
         }
 
         void SpawnAmmoPack() {
-            // Get player position
-            glmvec3 carPos = m_playerCar.GetPosition();
-            
-            // Spawn ammo pack at random position near player (within 30-50 units)
-            float angle = (rand() % 360) * (M_PI / 180.0f);
-            float distance = 30.0f + (rand() % 20);  // 30-50 units away
+            // Spawn ammo pack at completely random position within playfield
+            const float boundaryLimit = 65.0f;
             
             glmvec3 spawnPos{
-                carPos.x + glm::cos(angle) * distance,
-                carPos.y + glm::sin(angle) * distance,
+                ((rand() % 200) - 100) * (boundaryLimit / 100.0f),  // Random X between -65 and 65
+                ((rand() % 200) - 100) * (boundaryLimit / 100.0f),  // Random Y between -65 and 65
                 0.0f
             };
-            
-            // Clamp to playfield bounds
-            const float boundaryLimit = 65.0f;
-            spawnPos.x = glm::clamp(spawnPos.x, -boundaryLimit, boundaryLimit);
-            spawnPos.y = glm::clamp(spawnPos.y, -boundaryLimit, boundaryLimit);
             
             // Create ammo pack
             AmmoPack newAmmo;
