@@ -89,10 +89,6 @@ public:
         const float maxSpeed = 2000.0f;       // Maximum speed
         const float drag = 0.95f;           // Friction/air resistance
 
-        // Get current velocity in physics space
-        glmvec3 velocity = m_body->m_linear_velocityW;
-        glmvec3 velocityLocal = vpe::fromPhysics(velocity);
-
         // Apply drag (friction)
         m_speed *= drag;
 
